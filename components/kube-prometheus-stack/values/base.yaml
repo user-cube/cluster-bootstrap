@@ -1,15 +1,6 @@
 kube-prometheus-stack:
   crds:
-    enabled: true
-    upgradeJob:
-      enabled: true
-      forceConflicts: true
-      annotations:
-        argocd.argoproj.io/hook: PreSync
-
-  prometheusOperator:
-    admissionWebhooks:
-      enabled: false
+    enabled: false
 
   grafana:
     enabled: false
