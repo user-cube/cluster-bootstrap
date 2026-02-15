@@ -21,6 +21,15 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
+  ignoreDifferences:
+    - group: monitoring.coreos.com
+      kind: Prometheus
+      jqPathExpressions:
+        - .status
+    - group: monitoring.coreos.com
+      kind: Alertmanager
+      jqPathExpressions:
+        - .status
   syncPolicy:
     automated:
       prune: true
@@ -28,4 +37,5 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      - RespectIgnoreDifferences=true
 {{- end }}
