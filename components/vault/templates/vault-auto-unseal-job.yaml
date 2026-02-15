@@ -67,25 +67,24 @@ spec:
                 sleep 5
               done
 
-              # Get vault status — capture output even on non-zero exit
-              STATUS=$(vexec status -format=json 2>&1 || true)
-              echo "Raw status: ${STATUS}"
-
-              # Parse JSON — handle both with and without spaces around colons
-              INITIALIZED=$(echo "$STATUS" | sed -n 's/.*"initialized" *: *\(true\|false\).*/\1/p')
-              SEALED=$(echo "$STATUS" | sed -n 's/.*"sealed" *: *\(true\|false\).*/\1/p')
-
-              # Fallback: if parsing failed, check exit code directly
-              if [ -z "$INITIALIZED" ]; then
-                rc=0
-                vexec status >/dev/null 2>&1 || rc=$?
-                if [ "$rc" -eq 2 ]; then
-                  # Could be sealed or uninitialized — try init to find out
+              # Get vault status via text output (more reliable to parse than JSON via exec)
+              INITIALIZED="unknown"
+              SEALED="unknown"
+              rc=0
+              vexec status >/dev/null 2>&1 || rc=$?
+              if [ "$rc" -eq 0 ]; then
+                INITIALIZED="true"
+                SEALED="false"
+              elif [ "$rc" -eq 2 ]; then
+                # rc=2 means sealed or uninitialized — check init status
+                STATUS_TEXT=$(vexec status 2>&1 || true)
+                echo "Status output: ${STATUS_TEXT}"
+                if echo "$STATUS_TEXT" | grep -q "Vault is not initialized"; then
                   INITIALIZED="false"
                   SEALED="true"
-                elif [ "$rc" -eq 0 ]; then
+                else
                   INITIALIZED="true"
-                  SEALED="false"
+                  SEALED="true"
                 fi
               fi
 
@@ -105,29 +104,54 @@ spec:
                   -key-threshold="${KEY_THRESHOLD}" \
                   -format=json)
 
-                echo "Init output: ${INIT_OUTPUT}"
-                ROOT_TOKEN=$(echo "$INIT_OUTPUT" | sed -n 's/.*"root_token" *: *"\([^"]*\)".*/\1/p')
-                echo "Root token extracted: ${ROOT_TOKEN}"
+                echo "Init completed."
 
-                # Extract unseal keys from JSON array — one per line
-                UNSEAL_KEYS=$(echo "$INIT_OUTPUT" | sed -n '/"unseal_keys_b64"/,/]/p' | grep '"' | tr -d ' ",')
-                echo "Unseal keys extracted: ${UNSEAL_KEYS}"
+                # Write init output to a temp file for reliable parsing
+                TMPFILE=$(mktemp)
+                echo "$INIT_OUTPUT" > "$TMPFILE"
 
-                # Build kubectl create secret command
-                SECRET_ARGS="--from-literal=root-token=${ROOT_TOKEN}"
-                i=0
-                for KEY in ${UNSEAL_KEYS}; do
-                  SECRET_ARGS="${SECRET_ARGS} --from-literal=unseal-key-${i}=${KEY}"
-                  i=$((i+1))
-                done
+                # Extract root_token — search for the line with "root_token"
+                ROOT_TOKEN=$(sed -n 's/.*"root_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$TMPFILE")
+                echo "Root token extracted: [${ROOT_TOKEN:+OK}]"
+
+                if [ -z "$ROOT_TOKEN" ]; then
+                  echo "ERROR: Failed to extract root token from init output."
+                  echo "Raw output:"
+                  cat "$TMPFILE"
+                  rm -f "$TMPFILE"
+                  exit 1
+                fi
+
+                # Extract unseal keys — look for lines between "unseal_keys_b64" and "]"
+                # Each key is on its own line as "  \"<key>\""
+                UNSEAL_KEYS=$(sed -n '/"unseal_keys_b64"/,/\]/p' "$TMPFILE" | sed -n 's/.*"\([A-Za-z0-9+/=]\{10,\}\)".*/\1/p')
+                echo "Unseal keys extracted: $(echo "$UNSEAL_KEYS" | wc -l | tr -d ' ') keys"
+
+                if [ -z "$UNSEAL_KEYS" ]; then
+                  echo "ERROR: Failed to extract unseal keys from init output."
+                  echo "Raw output:"
+                  cat "$TMPFILE"
+                  rm -f "$TMPFILE"
+                  exit 1
+                fi
+
+                rm -f "$TMPFILE"
 
                 if [ "$HAS_SECRET" = "true" ]; then
                   echo "Deleting old secret ${SECRET_NAME}..."
                   kubectl delete secret -n "${NAMESPACE}" "${SECRET_NAME}"
                 fi
 
+                # Build and create the secret with individual --from-literal args
+                CREATE_CMD="kubectl create secret generic ${SECRET_NAME} -n ${NAMESPACE} --from-literal=root-token=${ROOT_TOKEN}"
+                i=0
+                for KEY in ${UNSEAL_KEYS}; do
+                  CREATE_CMD="${CREATE_CMD} --from-literal=unseal-key-${i}=${KEY}"
+                  i=$((i+1))
+                done
+
                 echo "Creating K8s secret ${SECRET_NAME}..."
-                eval kubectl create secret generic "${SECRET_NAME}" -n "${NAMESPACE}" ${SECRET_ARGS}
+                eval ${CREATE_CMD}
 
                 echo "Vault initialized. Keys stored in secret ${NAMESPACE}/${SECRET_NAME}."
                 SEALED="true"
@@ -146,10 +170,18 @@ spec:
 
                 i=0
                 while [ $i -lt ${KEY_THRESHOLD} ]; do
-                  KEY=$(kubectl get secret -n "${NAMESPACE}" "${SECRET_NAME}" -o jsonpath="{.data.unseal-key-${i}}" | base64 -d)
-                  echo "Applying unseal key $((i+1))/${KEY_THRESHOLD}..."
+                  JSONPATH=".data.unseal-key-${i}"
+                  KEY=$(kubectl get secret -n "${NAMESPACE}" "${SECRET_NAME}" -o jsonpath="{${JSONPATH}}" | base64 -d)
+                  echo "Applying unseal key $((i+1))/${KEY_THRESHOLD}... key length: ${#KEY}"
+                  if [ -z "$KEY" ]; then
+                    echo "ERROR: Unseal key ${i} is empty. Secret may be corrupted."
+                    echo "Delete secret ${SECRET_NAME} and Vault PVC, then re-deploy."
+                    exit 1
+                  fi
+                  # Pass key as argument via env var to avoid shell escaping issues
                   kubectl exec -n "${NAMESPACE}" "${VAULT_POD}" -- \
-                    sh -c "VAULT_ADDR=http://127.0.0.1:8200 vault operator unseal ${KEY}"
+                    env VAULT_ADDR=http://127.0.0.1:8200 UNSEAL_KEY="$KEY" \
+                    sh -c 'vault operator unseal "$UNSEAL_KEY"'
                   i=$((i+1))
                 done
 
