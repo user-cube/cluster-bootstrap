@@ -1,0 +1,46 @@
+kube-prometheus-stack:
+  grafana:
+    enabled: false
+
+  alertmanager:
+    enabled: false
+
+  nodeExporter:
+    enabled: true
+
+  kube-state-metrics:
+    enabled: true
+
+  prometheus:
+    prometheusSpec:
+      enableRemoteWriteReceiver: false
+
+      remoteWrite:
+        - url: http://REMOTE_WRITE_ENDPOINT/api/v1/write
+
+      scrapeInterval: 30s
+      evaluationInterval: 30s
+
+      serviceMonitorSelectorNilUsesHelmValues: false
+      podMonitorSelectorNilUsesHelmValues: false
+
+  kubeApiServer:
+    enabled: true
+
+  kubelet:
+    enabled: true
+
+  kubeControllerManager:
+    enabled: true
+
+  kubeScheduler:
+    enabled: true
+
+  kubeProxy:
+    enabled: true
+
+  kubeEtcd:
+    enabled: true
+
+  coreDns:
+    enabled: true
