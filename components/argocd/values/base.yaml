@@ -1,0 +1,24 @@
+argo-cd:
+  crds:
+    install: true
+    keep: true
+
+  global:
+    logging:
+      level: info
+
+  configs:
+    params:
+      server.insecure: false
+
+  server:
+    replicas: 1
+
+  controller:
+    replicas: 1
+
+  repoServer:
+    replicas: 1
+
+  applicationSet:
+    replicas: 1

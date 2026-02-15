@@ -1,0 +1,15 @@
+provider: vault
+
+vault:
+  kvPath: secret
+  kvVersion: "v2"
+  authTokenSecret: vault-token
+
+aws:
+  region: eu-west-1
+  authSecret: aws-credentials
+
+externalSecret:
+  refreshInterval: 1h
+  vaultSecretPath: argocd/repo-ssh-key
+  awsSecretName: argocd/repo-ssh-key

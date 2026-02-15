@@ -1,0 +1,5 @@
+apiVersion: v2
+name: app-of-apps
+description: Root application that manages all cluster components
+version: 1.0.0
+type: application

@@ -1,0 +1,9 @@
+apiVersion: v2
+name: vault
+description: HashiCorp Vault managed by App of Apps
+version: 1.0.0
+type: application
+dependencies:
+  - name: vault
+    version: 0.29.1
+    repository: https://helm.releases.hashicorp.com

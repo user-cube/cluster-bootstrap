@@ -1,0 +1,34 @@
+argo-cd:
+  configs:
+    params:
+      server.insecure: false
+
+  server:
+    replicas: 3
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+
+  controller:
+    replicas: 2
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+      limits:
+        memory: 2Gi
+
+  repoServer:
+    replicas: 3
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        memory: 1Gi
+
+  applicationSet:
+    replicas: 2

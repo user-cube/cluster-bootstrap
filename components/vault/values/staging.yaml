@@ -1,0 +1,10 @@
+vault:
+  server:
+    standalone:
+      enabled: true
+    dataStorage:
+      enabled: true
+      size: 10Gi
+    ha:
+      enabled: false
+    replicas: 1

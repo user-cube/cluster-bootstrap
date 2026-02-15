@@ -1,0 +1,17 @@
+environment: staging
+
+repo:
+  url: git@github.com:user-cube/cluster-bootstrap.git
+  targetRevision: main
+
+argocd:
+  enabled: true
+
+externalSecrets:
+  enabled: true
+
+vault:
+  enabled: true
+
+argocdRepoSecret:
+  enabled: true

@@ -1,0 +1,11 @@
+vault:
+  server:
+    dev:
+      enabled: true
+    standalone:
+      enabled: true
+    dataStorage:
+      enabled: false
+    ha:
+      enabled: false
+    replicas: 1

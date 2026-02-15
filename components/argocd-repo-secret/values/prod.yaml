@@ -1,0 +1,8 @@
+provider: vault
+
+vault:
+  address: http://vault.vault.svc:8200
+
+externalSecret:
+  repoUrl: git@github.com:user-cube/cluster-bootstrap.git
+  refreshInterval: 30m

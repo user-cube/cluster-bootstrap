@@ -1,0 +1,32 @@
+version: "3"
+
+vars:
+  BINARY_NAME: cluster-bootstrap
+
+tasks:
+  build:
+    desc: Build the CLI binary
+    deps: [tidy]
+    cmds:
+      - go build -o {{.BINARY_NAME}} .
+
+  clean:
+    desc: Remove the built binary
+    cmds:
+      - rm -f {{.BINARY_NAME}}
+
+  tidy:
+    desc: Tidy Go modules
+    cmds:
+      - go mod tidy
+
+  fmt:
+    desc: Format Go source files
+    cmds:
+      - go fmt ./...
+
+  vet:
+    desc: Run Go vet
+    deps: [tidy]
+    cmds:
+      - go vet ./...

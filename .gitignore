@@ -1,0 +1,26 @@
+# Helm
+charts/
+Chart.lock
+*.tgz
+
+# Secrets
+*.key
+*.pem
+secrets/
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# Binaries
+cli/cluster-bootstrap
+cli/secrets.enc.yaml
+cli/.sops.yaml
+
+# Sops
+age-key.txt
+repo-ssh-key.pem
+.env

@@ -1,0 +1,12 @@
+vault:
+  server:
+    standalone:
+      enabled: false
+    dataStorage:
+      enabled: true
+      size: 10Gi
+    ha:
+      enabled: true
+      replicas: 3
+      raft:
+        enabled: true
