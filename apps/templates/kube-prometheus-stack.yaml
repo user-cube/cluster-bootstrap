@@ -15,6 +15,7 @@ spec:
     targetRevision: {{ .Values.repo.targetRevision }}
     path: components/kube-prometheus-stack
     helm:
+      skipCrds: true
       valueFiles:
         - values/base.yaml
         - values/{{ .Values.environment }}.yaml
