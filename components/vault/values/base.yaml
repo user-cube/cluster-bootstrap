@@ -3,3 +3,11 @@ vault:
     enabled: false
   ui:
     enabled: true
+
+vaultConfig:
+  enabled: true
+  role: external-secrets
+  serviceAccount: external-secrets
+  serviceAccountNamespace: external-secrets
+  policyName: external-secrets
+  policyPath: "secret/*"

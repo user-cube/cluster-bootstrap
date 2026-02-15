@@ -17,8 +17,8 @@ secrets/
 
 # Binaries
 cli/cluster-bootstrap
-cli/secrets.enc.yaml
-cli/.sops.yaml
+secrets.enc.yaml
+.sops.yaml
 
 # Sops
 age-key.txt

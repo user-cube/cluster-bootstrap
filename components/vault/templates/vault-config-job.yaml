@@ -1,0 +1,75 @@
+{{- if .Values.vaultConfig.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-kubernetes-auth-config
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app: vault-config
+    spec:
+      serviceAccountName: {{ .Release.Name }}-vault
+      restartPolicy: OnFailure
+      containers:
+        - name: vault-config
+          image: hashicorp/vault:1.15.4
+          env:
+            - name: VAULT_ADDR
+              value: "http://{{ .Release.Name }}-vault.{{ .Release.Namespace }}.svc:8200"
+            - name: VAULT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-vault-root-token
+                  key: token
+                  optional: true
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              # Wait for Vault to be ready
+              echo "Waiting for Vault to be ready..."
+              until vault status 2>/dev/null; do
+                echo "Vault not ready, retrying in 5s..."
+                sleep 5
+              done
+
+              # For dev mode, use the root token from env or default
+              if [ -z "$VAULT_TOKEN" ]; then
+                export VAULT_TOKEN="root"
+              fi
+
+              # Enable Kubernetes auth backend (ignore if already enabled)
+              echo "Enabling Kubernetes auth backend..."
+              vault auth enable kubernetes 2>/dev/null || echo "Kubernetes auth already enabled"
+
+              # Configure Kubernetes auth backend
+              echo "Configuring Kubernetes auth backend..."
+              vault write auth/kubernetes/config \
+                kubernetes_host="https://kubernetes.default.svc"
+
+              # Create policy for external-secrets
+              echo "Creating {{ .Values.vaultConfig.policyName }} policy..."
+              vault policy write {{ .Values.vaultConfig.policyName }} - <<EOF
+              path "{{ .Values.vaultConfig.policyPath }}" {
+                capabilities = ["read", "list"]
+              }
+              EOF
+
+              # Create role for external-secrets
+              echo "Creating {{ .Values.vaultConfig.role }} role..."
+              vault write auth/kubernetes/role/{{ .Values.vaultConfig.role }} \
+                bound_service_account_names={{ .Values.vaultConfig.serviceAccount }} \
+                bound_service_account_namespaces={{ .Values.vaultConfig.serviceAccountNamespace }} \
+                policies={{ .Values.vaultConfig.policyName }} \
+                ttl=1h
+
+              echo "Vault Kubernetes auth configuration complete!"
+{{- end }}

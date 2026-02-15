@@ -3,7 +3,11 @@ provider: vault
 vault:
   kvPath: secret
   kvVersion: "v2"
-  authTokenSecret: vault-token
+  authType: kubernetes
+  kubernetesRole: external-secrets
+  kubernetesMountPath: kubernetes
+  serviceAccountName: external-secrets
+  serviceAccountNamespace: external-secrets
 
 aws:
   region: eu-west-1
