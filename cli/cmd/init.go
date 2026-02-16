@@ -131,7 +131,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 
 		encrypted, err := sops.Encrypt(tmpFile, nil)
-		os.Remove(tmpFile)
+		_ = os.Remove(tmpFile)
 		if err != nil {
 			return fmt.Errorf("failed to encrypt secrets for %s: %w", env, err)
 		}

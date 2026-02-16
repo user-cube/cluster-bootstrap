@@ -92,7 +92,7 @@ func TestSetAgeEnv(t *testing.T) {
 
 	t.Run("sets and restores env var", func(t *testing.T) {
 		// Clear the env var first
-		os.Unsetenv("SOPS_AGE_KEY_FILE")
+		_ = os.Unsetenv("SOPS_AGE_KEY_FILE")
 
 		restore := setAgeEnv(&Options{AgeKeyFile: "/tmp/test-key.txt"})
 
@@ -107,8 +107,8 @@ func TestSetAgeEnv(t *testing.T) {
 	})
 
 	t.Run("restores previous value", func(t *testing.T) {
-		os.Setenv("SOPS_AGE_KEY_FILE", "original-value")
-		defer os.Unsetenv("SOPS_AGE_KEY_FILE")
+		_ = os.Setenv("SOPS_AGE_KEY_FILE", "original-value")
+		defer func() { _ = os.Unsetenv("SOPS_AGE_KEY_FILE") }()
 
 		restore := setAgeEnv(&Options{AgeKeyFile: "/tmp/new-key.txt"})
 

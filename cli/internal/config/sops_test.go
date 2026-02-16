@@ -177,7 +177,7 @@ func TestUpsertSopsRule(t *testing.T) {
 	t.Run("invalid existing file returns error", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		outPath := filepath.Join(tmpDir, ".sops.yaml")
-		os.WriteFile(outPath, []byte("not: [valid yaml"), 0644)
+		_ = os.WriteFile(outPath, []byte("not: [valid yaml"), 0644)
 
 		err := UpsertSopsRule(outPath, "age", "age1key", "dev")
 		require.Error(t, err)
