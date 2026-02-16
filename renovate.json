@@ -1,46 +1,81 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
-  "schedule": ["before 9am on saturday"],
+  "extends": [
+    "config:recommended"
+  ],
+  "schedule": [
+    "before 9am on saturday"
+  ],
   "prConcurrentLimit": 5,
   "packageRules": [
     {
       "description": "Group Helm chart updates (require manual review)",
-      "matchManagers": ["helmv3"],
+      "matchManagers": [
+        "helmv3"
+      ],
       "groupName": "helm charts",
       "automerge": false
     },
     {
       "description": "Group Kubernetes and Helm Go modules",
-      "matchManagers": ["gomod"],
-      "matchPackagePatterns": ["^k8s\\.io/", "^helm\\.sh/", "^sigs\\.k8s\\.io/"],
-      "groupName": "kubernetes go modules"
+      "matchManagers": [
+        "gomod"
+      ],
+      "groupName": "kubernetes go modules",
+      "matchPackageNames": [
+        "/^k8s\\.io//",
+        "/^helm\\.sh//",
+        "/^sigs\\.k8s\\.io//"
+      ]
     },
     {
       "description": "Group monitoring-related updates",
-      "matchPackagePatterns": ["prometheus", "grafana"],
-      "groupName": "monitoring"
+      "groupName": "monitoring",
+      "matchPackageNames": [
+        "/prometheus/",
+        "/grafana/"
+      ]
     },
     {
       "description": "Group GitHub Actions updates",
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "groupName": "github actions",
-      "matchUpdateTypes": ["minor", "patch"]
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ]
     },
     {
       "description": "Group minor/patch Go module updates",
-      "matchManagers": ["gomod"],
-      "matchUpdateTypes": ["minor", "patch"]
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ]
     },
     {
       "description": "Group minor/patch Python dependency updates",
-      "matchManagers": ["pip_requirements"],
-      "matchUpdateTypes": ["minor", "patch"]
+      "matchManagers": [
+        "pip_requirements"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ]
     },
     {
       "description": "Group minor/patch pre-commit hook updates",
-      "matchManagers": ["pre-commit"],
-      "matchUpdateTypes": ["minor", "patch"]
+      "matchManagers": [
+        "pre-commit"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ]
     }
   ]
 }
