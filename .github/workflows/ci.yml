@@ -67,7 +67,11 @@ jobs:
             if [ -f "$chart/Chart.lock" ]; then
               helm dependency build "$chart"
             fi
-            helm lint "$chart"
+            values_args=""
+            if [ -f "$chart/values/base.yaml" ]; then
+              values_args="-f $chart/values/base.yaml"
+            fi
+            helm lint "$chart" $values_args
           done
 
   helm-validate:
