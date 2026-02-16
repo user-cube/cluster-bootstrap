@@ -25,25 +25,21 @@
       "description": "Group GitHub Actions updates",
       "matchManagers": ["github-actions"],
       "groupName": "github actions",
-      "automerge": true,
       "matchUpdateTypes": ["minor", "patch"]
     },
     {
-      "description": "Auto-merge minor/patch Go module updates",
+      "description": "Group minor/patch Go module updates",
       "matchManagers": ["gomod"],
-      "automerge": true,
       "matchUpdateTypes": ["minor", "patch"]
     },
     {
-      "description": "Auto-merge minor/patch Python dependency updates",
+      "description": "Group minor/patch Python dependency updates",
       "matchManagers": ["pip_requirements"],
-      "automerge": true,
       "matchUpdateTypes": ["minor", "patch"]
     },
     {
-      "description": "Auto-merge minor/patch pre-commit hook updates",
+      "description": "Group minor/patch pre-commit hook updates",
       "matchManagers": ["pre-commit"],
-      "automerge": true,
       "matchUpdateTypes": ["minor", "patch"]
     }
   ]
