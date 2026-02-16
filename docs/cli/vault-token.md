@@ -2,6 +2,8 @@
 
 ```bash
 ./cli/cluster-bootstrap vault-token --token <root-token>
+echo "<root-token>" | ./cli/cluster-bootstrap vault-token
+./cli/cluster-bootstrap vault-token
 ```
 
 Stores the Vault root token as a Kubernetes Secret.
@@ -14,6 +16,6 @@ Creates or updates a `vault-root-token` Secret in the `vault` namespace. This is
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--token` | Yes | Vault root token |
+| `--token` | No | Vault root token (can be read from stdin or prompt) |
 | `--kubeconfig` | No | Path to kubeconfig file |
 | `--context` | No | Kubeconfig context to use |

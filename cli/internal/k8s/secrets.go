@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -13,6 +14,9 @@ func (c *Client) EnsureNamespace(ctx context.Context, name string) error {
 	_, err := c.Clientset.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
 	if err == nil {
 		return nil
+	}
+	if !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to get namespace %s: %w", name, err)
 	}
 
 	ns := &corev1.Namespace{
@@ -58,6 +62,9 @@ func (c *Client) CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey
 	// Try to update, create if not exists
 	existing, err := c.Clientset.CoreV1().Secrets("argocd").Get(ctx, "repo-ssh-key", metav1.GetOptions{})
 	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("failed to get repo-ssh-key secret: %w", err)
+		}
 		_, err = c.Clientset.CoreV1().Secrets("argocd").Create(ctx, secret, metav1.CreateOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create repo-ssh-key secret: %w", err)
@@ -99,6 +106,9 @@ func (c *Client) CreateGitCryptKeySecret(ctx context.Context, keyData []byte) er
 
 	existing, err := c.Clientset.CoreV1().Secrets("argocd").Get(ctx, "git-crypt-key", metav1.GetOptions{})
 	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to get git-crypt-key secret: %w", err)
+		}
 		_, err = c.Clientset.CoreV1().Secrets("argocd").Create(ctx, secret, metav1.CreateOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to create git-crypt-key secret: %w", err)

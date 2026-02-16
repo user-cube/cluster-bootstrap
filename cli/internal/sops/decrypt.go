@@ -4,21 +4,31 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
-	"github.com/getsops/sops/v3"
+	sopslib "github.com/getsops/sops/v3"
 	"github.com/getsops/sops/v3/aes"
-	"github.com/getsops/sops/v3/age"
 	"github.com/getsops/sops/v3/cmd/sops/common"
+	sopsconfig "github.com/getsops/sops/v3/config"
 	"github.com/getsops/sops/v3/decrypt"
 	"github.com/getsops/sops/v3/keyservice"
-	yamlstore "github.com/getsops/sops/v3/stores/yaml"
 	"github.com/getsops/sops/v3/version"
 )
 
 // Options configures SOPS operations.
 type Options struct {
 	AgeKeyFile string
+}
+
+type encryptionConfig struct {
+	keyGroups               []sopslib.KeyGroup
+	shamirThreshold         int
+	unencryptedSuffix       string
+	encryptedSuffix         string
+	unencryptedRegex        string
+	encryptedRegex          string
+	unencryptedCommentRegex string
+	encryptedCommentRegex   string
+	macOnlyEncrypted        bool
 }
 
 // setAgeEnv sets SOPS_AGE_KEY_FILE so the sops library can find the key.
@@ -62,33 +72,41 @@ func Encrypt(filePath string, opts *Options) ([]byte, error) {
 		return nil, fmt.Errorf("sops encrypt: failed to read file: %w", err)
 	}
 
-	// Load .sops.yaml creation rules to find the age recipient
-	recipient, err := findAgeRecipient(filePath)
+	encConfig, err := loadEncryptionConfig(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("sops encrypt: %w", err)
+		return nil, err
 	}
 
 	// Parse plaintext into sops tree branches
-	store := &yamlstore.Store{}
+	store := common.DefaultStoreForPath(sopsconfig.NewStoresConfig(), filePath)
 	branches, err := store.LoadPlainFile(data)
 	if err != nil {
 		return nil, fmt.Errorf("sops encrypt: failed to parse plaintext: %w", err)
 	}
-
-	// Build age master key
-	ageKey, err := age.MasterKeyFromRecipient(recipient)
-	if err != nil {
-		return nil, fmt.Errorf("sops encrypt: invalid age recipient: %w", err)
+	if len(branches) < 1 {
+		return nil, fmt.Errorf("sops encrypt: file cannot be empty")
 	}
-	keyGroup := sops.KeyGroup{ageKey}
 
-	tree := sops.Tree{
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("sops encrypt: failed to resolve path: %w", err)
+	}
+
+	tree := sopslib.Tree{
 		Branches: branches,
-		Metadata: sops.Metadata{
-			KeyGroups:         []sops.KeyGroup{keyGroup},
-			UnencryptedSuffix: "",
-			Version:           version.Version,
+		Metadata: sopslib.Metadata{
+			KeyGroups:               encConfig.keyGroups,
+			ShamirThreshold:         encConfig.shamirThreshold,
+			UnencryptedSuffix:       encConfig.unencryptedSuffix,
+			EncryptedSuffix:         encConfig.encryptedSuffix,
+			UnencryptedRegex:        encConfig.unencryptedRegex,
+			EncryptedRegex:          encConfig.encryptedRegex,
+			UnencryptedCommentRegex: encConfig.unencryptedCommentRegex,
+			EncryptedCommentRegex:   encConfig.encryptedCommentRegex,
+			MACOnlyEncrypted:        encConfig.macOnlyEncrypted,
+			Version:                 version.Version,
 		},
+		FilePath: absPath,
 	}
 
 	// Generate data key
@@ -109,7 +127,7 @@ func Encrypt(filePath string, opts *Options) ([]byte, error) {
 		return nil, fmt.Errorf("sops encrypt: failed to encrypt: %w", err)
 	}
 
-	// Emit encrypted YAML
+	// Emit encrypted output in the original format
 	out, err := store.EmitEncryptedFile(tree)
 	if err != nil {
 		return nil, fmt.Errorf("sops encrypt: failed to emit encrypted file: %w", err)
@@ -118,41 +136,69 @@ func Encrypt(filePath string, opts *Options) ([]byte, error) {
 	return out, nil
 }
 
-// findAgeRecipient reads the .sops.yaml config to find the age recipient for the given file.
-func findAgeRecipient(filePath string) (string, error) {
-	// Walk up from the file to find .sops.yaml
-	dir := filepath.Dir(filePath)
-	for {
-		sopsConfig := filepath.Join(dir, ".sops.yaml")
-		data, err := os.ReadFile(sopsConfig)
-		if err == nil {
-			recipient, err := parseAgeRecipientFromConfig(data)
-			if err == nil {
-				return recipient, nil
-			}
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
+func loadEncryptionConfig(filePath string) (*encryptionConfig, error) {
+	configPath, err := findSopsConfigPath(filePath)
+	if err != nil {
+		return nil, err
 	}
-	return "", fmt.Errorf("could not find .sops.yaml with age recipient")
+
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("sops encrypt: failed to resolve path: %w", err)
+	}
+
+	conf, err := sopsconfig.LoadCreationRuleForFile(configPath, absPath, nil)
+	if err != nil {
+		return nil, fmt.Errorf("sops encrypt: failed to load config: %w", err)
+	}
+	if conf == nil {
+		return nil, fmt.Errorf("sops encrypt: no matching creation rules found in %s", configPath)
+	}
+
+	unencryptedSuffix := conf.UnencryptedSuffix
+	cryptRuleCount := 0
+	if conf.UnencryptedSuffix != "" {
+		cryptRuleCount++
+	}
+	if conf.EncryptedSuffix != "" {
+		cryptRuleCount++
+	}
+	if conf.UnencryptedRegex != "" {
+		cryptRuleCount++
+	}
+	if conf.EncryptedRegex != "" {
+		cryptRuleCount++
+	}
+	if conf.UnencryptedCommentRegex != "" {
+		cryptRuleCount++
+	}
+	if conf.EncryptedCommentRegex != "" {
+		cryptRuleCount++
+	}
+	if cryptRuleCount == 0 {
+		unencryptedSuffix = sopslib.DefaultUnencryptedSuffix
+	}
+
+	return &encryptionConfig{
+		keyGroups:               conf.KeyGroups,
+		shamirThreshold:         conf.ShamirThreshold,
+		unencryptedSuffix:       unencryptedSuffix,
+		encryptedSuffix:         conf.EncryptedSuffix,
+		unencryptedRegex:        conf.UnencryptedRegex,
+		encryptedRegex:          conf.EncryptedRegex,
+		unencryptedCommentRegex: conf.UnencryptedCommentRegex,
+		encryptedCommentRegex:   conf.EncryptedCommentRegex,
+		macOnlyEncrypted:        conf.MACOnlyEncrypted,
+	}, nil
 }
 
-// parseAgeRecipientFromConfig extracts the age recipient from .sops.yaml content.
-// We parse it manually to avoid importing the full sops config package.
-func parseAgeRecipientFromConfig(data []byte) (string, error) {
-	// Simple extraction: find "age:" field in creation_rules
-	for _, line := range strings.Split(string(data), "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "age:") {
-			val := strings.TrimSpace(strings.TrimPrefix(trimmed, "age:"))
-			val = strings.Trim(val, "\"'")
-			if val != "" {
-				return val, nil
-			}
-		}
+func findSopsConfigPath(filePath string) (string, error) {
+	result, err := sopsconfig.LookupConfigFile(filePath)
+	if err == nil {
+		return result.Path, nil
 	}
-	return "", fmt.Errorf("no age recipient found in .sops.yaml")
+	if result.Warning != "" {
+		return "", fmt.Errorf("sops encrypt: %s", result.Warning)
+	}
+	return "", fmt.Errorf("sops encrypt: %w", err)
 }

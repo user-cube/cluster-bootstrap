@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -25,6 +26,7 @@ import (
 const (
 	argoCDNamespace = "argocd"
 	argoCDRelease   = "argocd"
+	argoCDChartDep  = "argo-cd"
 )
 
 // chartDependency represents a single entry in Chart.yaml dependencies.
@@ -39,9 +41,9 @@ type chartFile struct {
 	Dependencies []chartDependency `yaml:"dependencies"`
 }
 
-// loadChartConfig reads components/argocd/Chart.yaml and returns the first dependency's
+// loadChartConfig reads components/argocd/Chart.yaml and returns the named dependency's
 // chart name, version, and repository URL.
-func loadChartConfig(baseDir string) (name, version, repoURL string, err error) {
+func loadChartConfig(baseDir, dependencyName string) (name, version, repoURL string, err error) {
 	chartPath := filepath.Join(baseDir, "components/argocd/Chart.yaml")
 	data, err := os.ReadFile(chartPath)
 	if err != nil {
@@ -57,8 +59,15 @@ func loadChartConfig(baseDir string) (name, version, repoURL string, err error) 
 		return "", "", "", fmt.Errorf("no dependencies found in %s", chartPath)
 	}
 
-	dep := cf.Dependencies[0]
-	return dep.Name, dep.Version, dep.Repository, nil
+	var depNames []string
+	for _, dep := range cf.Dependencies {
+		depNames = append(depNames, dep.Name)
+		if dep.Name == dependencyName {
+			return dep.Name, dep.Version, dep.Repository, nil
+		}
+	}
+
+	return "", "", "", fmt.Errorf("dependency %s not found in %s (found: %s)", dependencyName, chartPath, strings.Join(depNames, ", "))
 }
 
 // InstallArgoCD installs or upgrades ArgoCD using the Helm SDK.
@@ -86,7 +95,7 @@ func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir st
 	}
 
 	// Read chart name, version and repo from components/argocd/Chart.yaml
-	chartName, chartVersion, repoURL, err := loadChartConfig(baseDir)
+	chartName, chartVersion, repoURL, err := loadChartConfig(baseDir, argoCDChartDep)
 	if err != nil {
 		return fmt.Errorf("failed to load chart config: %w", err)
 	}
@@ -210,7 +219,7 @@ func loadValues(baseDir, env string) (map[string]interface{}, error) {
 	}
 
 	// Merge: env values override base values
-	merged := chartutil.MergeTables(envVals.AsMap(), baseVals.AsMap())
+	merged := chartutil.MergeTables(baseVals.AsMap(), envVals.AsMap())
 	return merged, nil
 }
 

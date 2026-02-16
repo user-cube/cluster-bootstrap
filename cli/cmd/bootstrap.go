@@ -56,17 +56,40 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	env := args[0]
 
 	fmt.Printf("==> Bootstrapping cluster for environment: %s\n", env)
+	if verbose {
+		fmt.Printf("  Base dir: %s\n", baseDir)
+		fmt.Printf("  App path: %s\n", appPath)
+		fmt.Printf("  Encryption: %s\n", encryption)
+		if kubeconfig != "" {
+			fmt.Printf("  Kubeconfig: %s\n", kubeconfig)
+		} else {
+			fmt.Println("  Kubeconfig: default")
+		}
+		if kubeContext != "" {
+			fmt.Printf("  Context: %s\n", kubeContext)
+		}
+		fmt.Printf("  Dry run: %t\n", dryRun)
+		fmt.Printf("  Skip ArgoCD install: %t\n", skipArgoCDInstall)
+		if bootstrapAgeKey != "" {
+			fmt.Printf("  Age key file: %s\n", bootstrapAgeKey)
+		}
+		if gitcryptKeyFile != "" {
+			fmt.Printf("  Git-crypt key file: %s\n", gitcryptKeyFile)
+		}
+	}
 
 	// Load secrets based on encryption backend
 	var envSecrets *config.EnvironmentSecrets
 	var err error
 
+	var secretsPath string
 	switch encryption {
 	case "git-crypt":
 		sf := secretsFile
 		if sf == "" {
 			sf = filepath.Join(baseDir, config.SecretsFileNamePlain(env))
 		}
+		secretsPath = sf
 		fmt.Printf("==> Loading plaintext secrets from %s...\n", sf)
 		envSecrets, err = config.LoadSecretsPlaintext(sf)
 		if err != nil {
@@ -77,6 +100,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		if sf == "" {
 			sf = filepath.Join(baseDir, config.SecretsFileName(env))
 		}
+		secretsPath = sf
 		fmt.Printf("==> Decrypting secrets from %s...\n", sf)
 		sopsOpts := &sops.Options{AgeKeyFile: bootstrapAgeKey}
 		envSecrets, err = config.LoadSecrets(sf, sopsOpts)
@@ -85,6 +109,10 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		}
 	default:
 		return fmt.Errorf("unsupported encryption backend: %s (use sops or git-crypt)", encryption)
+	}
+
+	if verbose && secretsPath != "" {
+		fmt.Printf("  Secrets file: %s\n", secretsPath)
 	}
 
 	if verbose {

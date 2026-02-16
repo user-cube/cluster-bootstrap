@@ -99,6 +99,8 @@ For staging and production, after Vault initializes you need to store the root t
 
 ```bash
 ./cli/cluster-bootstrap vault-token --token <vault-root-token>
+echo "<vault-root-token>" | ./cli/cluster-bootstrap vault-token
+./cli/cluster-bootstrap vault-token
 ```
 
 This creates a `vault-root-token` Secret in the `vault` namespace, which the Vault configuration and seed jobs use.
