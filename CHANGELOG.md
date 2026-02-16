@@ -1,3 +1,10 @@
+## [1.1.3](https://github.com/user-cube/cluster-bootstrap/compare/v1.1.2...v1.1.3) (2026-02-16)
+
+
+### Bug Fixes
+
+* remove automerge from renovate ([32763e6](https://github.com/user-cube/cluster-bootstrap/commit/32763e6743f67777068f5c42e2001a30aec7d948))
+
 ## [1.1.2](https://github.com/user-cube/cluster-bootstrap/compare/v1.1.1...v1.1.2) (2026-02-16)
 
 
