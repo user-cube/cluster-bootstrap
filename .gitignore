@@ -17,13 +17,13 @@ secrets/
 
 # Binaries
 cli/cluster-bootstrap
-*.enc.yaml
-.sops.yaml
 
 # Sops
 age-key.txt
 repo-ssh-key.pem
 .env
+test_secrets/*
+.sops-test.yaml
 
 # MkDocs
 site/

@@ -1,0 +1,47 @@
+{{- range $name, $config := .Values.components }}
+{{- if $config.enabled }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $name }}
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: {{ $config.syncWave | quote }}
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: {{ $.Values.repo.url }}
+    targetRevision: {{ $.Values.repo.targetRevision }}
+    path: components/{{ $name }}
+    {{- if or (not (hasKey $config "hasValues")) $config.hasValues }}
+    helm:
+      valueFiles:
+        - values/base.yaml
+        - values/{{ $.Values.environment }}.yaml
+    {{- end }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ $config.namespace }}
+  {{- if $config.ignoreDifferences }}
+  ignoreDifferences:
+    {{- toYaml $config.ignoreDifferences | nindent 4 }}
+  {{- end }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    {{- $createNs := or (not (hasKey $config "createNamespace")) $config.createNamespace }}
+    {{- if or $createNs $config.syncOptions }}
+    syncOptions:
+      {{- if $createNs }}
+      - CreateNamespace=true
+      {{- end }}
+      {{- range $config.syncOptions }}
+      - {{ . }}
+      {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}

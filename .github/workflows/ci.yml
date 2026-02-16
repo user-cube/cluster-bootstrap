@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Go Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+
+      - name: Run tests
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: cli/coverage.out
+
+  lint:
+    name: Go Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          working-directory: cli
+
+  helm-lint:
+    name: Helm Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+
+      - name: Lint all charts
+        run: |
+          helm lint apps/
+          for chart in components/*/; do
+            echo "Linting $chart..."
+            if grep -q "^dependencies:" "$chart/Chart.yaml"; then
+              helm dependency build "$chart"
+            fi
+            values_args=""
+            if [ -f "$chart/values/base.yaml" ]; then
+              values_args="-f $chart/values/base.yaml"
+            fi
+            helm lint "$chart" $values_args
+          done
+
+  helm-validate:
+    name: Helm Validate Values
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [dev, staging, prod]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+
+      - name: Build chart dependencies
+        run: |
+          for chart in components/*/; do
+            if grep -q "^dependencies:" "$chart/Chart.yaml"; then
+              helm dependency build "$chart"
+            fi
+          done
+
+      - name: Validate apps values
+        run: helm template apps/ -f apps/values/${{ matrix.environment }}.yaml
+
+      - name: Validate component values
+        run: |
+          for chart in components/*/; do
+            name=$(basename "$chart")
+            base="$chart/values/base.yaml"
+            env_file="$chart/values/${{ matrix.environment }}.yaml"
+            if [ -f "$base" ] && [ -f "$env_file" ]; then
+              echo "Validating $name for ${{ matrix.environment }}..."
+              helm template "$chart" -f "$base" -f "$env_file"
+            fi
+          done

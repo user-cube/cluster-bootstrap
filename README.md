@@ -19,7 +19,8 @@ Online documentation available at [Cluster Boostrap Docs](https://user-cube.gith
 - `helm` (for local template testing)
 - `sops` and `age` (for secrets encryption/decryption)
 - `go` 1.25+ (to build the CLI)
-- `task` (task runner for CLI development)
+- `task` ([Task runner](https://taskfile.dev/))
+- `pre-commit` ([pre-commit hooks](https://pre-commit.com/))
 - SSH private key with read access to this repo
 
 ## Quick Start
@@ -27,7 +28,6 @@ Online documentation available at [Cluster Boostrap Docs](https://user-cube.gith
 ### 1. Build the CLI
 
 ```bash
-cd cli
 task build
 ```
 
@@ -67,13 +67,15 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
 ```
 CLI bootstrap  →  ArgoCD + App of Apps (root Application)
                         ↓
-                   apps/ (Helm chart generating Application CRs)
+                   apps/ (Helm chart with dynamic template)
                         ↓
               components/argocd/  (self-managed ArgoCD)
               components/xxx/    (other components)
 ```
 
 ArgoCD manages itself — changes pushed to this repo are automatically synced.
+
+The `apps/` chart uses a **single dynamic template** that iterates over a `components` map defined in `apps/values.yaml`. Adding a new component requires only a new entry in the values — no template files to create or copy.
 
 ## Components
 
@@ -96,6 +98,44 @@ ArgoCD manages itself — changes pushed to this repo are automatically synced.
 | `init` | Interactive setup for SOPS config and encrypted secrets files |
 | `vault-token` | Store Vault root token as Kubernetes secret |
 
+## Development
+
+### Setup
+
+```bash
+pre-commit install
+```
+
+### Available tasks
+
+Run `task --list` to see all available tasks. The most common ones:
+
+```bash
+task test         # Run Go tests with coverage
+task lint         # Run golangci-lint
+task helm-lint    # Lint Helm charts with templates
+task fmt          # Format Go source files
+task vet          # Run Go vet
+task docs-serve   # Serve MkDocs documentation locally
+```
+
+### Secrets example
+
+`secrets.example.enc.yaml` contains the expected secrets structure. To create a new environment:
+
+```bash
+cp secrets.example.enc.yaml secrets.myenv.enc.yaml
+sops --encrypt --in-place secrets.myenv.enc.yaml
+```
+
+Or use the CLI interactively: `./cli/cluster-bootstrap init myenv`
+
+To use a custom `.sops.yaml` path, set `SOPS_CONFIG` in your `.env`:
+
+```bash
+SOPS_CONFIG=/path/to/custom/.sops.yaml
+```
+
 ## Environments
 
 | Environment | Values File | Description |
@@ -103,3 +143,13 @@ ArgoCD manages itself — changes pushed to this repo are automatically synced.
 | dev | `apps/values/dev.yaml` | Local/development clusters, minimal resources |
 | staging | `apps/values/staging.yaml` | Pre-production, moderate resources |
 | prod | `apps/values/prod.yaml` | Production, HA configuration |
+
+Environment files only need to set the `environment` key. Component defaults (namespace, sync wave, syncOptions, etc.) are defined in `apps/values.yaml`. To disable a component per environment:
+
+```yaml
+# apps/values/dev.yaml
+environment: dev
+components:
+  trivy-operator:
+    enabled: false
+```

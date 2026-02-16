@@ -22,7 +22,7 @@ var (
 )
 
 var initCmd = &cobra.Command{
-	Use:   "init",
+	Use:   "init [environments...]",
 	Short: "Interactive setup to create .sops.yaml and per-environment secrets files",
 	Long: `Interactively configure SOPS encryption and create encrypted secrets files.
 Prompts for the SOPS provider, encryption key, and per-environment secrets.
@@ -41,50 +41,65 @@ func init() {
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	// Step 1: Select SOPS provider
-	if provider == "" {
-		err := huh.NewSelect[string]().
-			Title("Select SOPS provider").
-			Options(
-				huh.NewOption("age", "age"),
-				huh.NewOption("AWS KMS", "aws-kms"),
-				huh.NewOption("GCP KMS", "gcp-kms"),
-			).
-			Value(&provider).
-			Run()
-		if err != nil {
-			return fmt.Errorf("prompt failed: %w", err)
-		}
-	}
-
-	// Step 2: Get encryption key
-	key, err := getProviderKey(provider)
-	if err != nil {
-		return err
-	}
-
-	// Step 3: Write .sops.yaml
 	sopsConfigPath := filepath.Join(outputDir, ".sops.yaml")
-	if err := config.WriteSopsConfig(sopsConfigPath, provider, key); err != nil {
-		return err
+
+	// Determine environment names: from positional args or interactive prompt
+	var environments []string
+	if len(args) > 0 {
+		environments = args
+	} else {
+		for {
+			var env string
+			err := huh.NewInput().
+				Title("Environment name (leave empty to finish)").
+				Value(&env).
+				Run()
+			if err != nil {
+				return fmt.Errorf("prompt failed: %w", err)
+			}
+			if env == "" {
+				break
+			}
+			environments = append(environments, env)
+		}
 	}
-	fmt.Printf("Created %s\n", sopsConfigPath)
 
-	// Step 4: Prompt for environment names and create per-environment secrets files
+	// Create per-environment secrets files
 	created := 0
-	for {
-		var env string
-		err := huh.NewInput().
-			Title("Environment name (leave empty to finish)").
-			Value(&env).
-			Run()
-		if err != nil {
-			return fmt.Errorf("prompt failed: %w", err)
-		}
-		if env == "" {
-			break
+
+	for _, env := range environments {
+		fmt.Printf("\n--- Environment: %s ---\n", env)
+
+		// Select SOPS provider for this environment
+		envProvider := provider
+		if envProvider == "" {
+			err := huh.NewSelect[string]().
+				Title(fmt.Sprintf("Select SOPS provider for %s", env)).
+				Options(
+					huh.NewOption("age", "age"),
+					huh.NewOption("AWS KMS", "aws-kms"),
+					huh.NewOption("GCP KMS", "gcp-kms"),
+				).
+				Value(&envProvider).
+				Run()
+			if err != nil {
+				return fmt.Errorf("prompt failed: %w", err)
+			}
 		}
 
+		// Get encryption key for this environment
+		key, err := getProviderKey(envProvider)
+		if err != nil {
+			return err
+		}
+
+		// Upsert SOPS creation rule for this environment
+		if err := config.UpsertSopsRule(sopsConfigPath, envProvider, key, env); err != nil {
+			return err
+		}
+		fmt.Printf("Updated %s with rule for %s\n", sopsConfigPath, env)
+
+		// Create encrypted secrets file
 		outputFile := filepath.Join(outputDir, config.SecretsFileName(env))
 		if _, statErr := os.Stat(outputFile); statErr == nil {
 			var overwrite bool
@@ -105,7 +120,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		// Step 5: Write plaintext YAML to temp file, encrypt with SOPS
 		plaintextData, err := yaml.Marshal(envSecrets)
 		if err != nil {
 			return fmt.Errorf("failed to marshal secrets: %w", err)
@@ -117,7 +131,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 
 		encrypted, err := sops.Encrypt(tmpFile, nil)
-		os.Remove(tmpFile)
+		_ = os.Remove(tmpFile)
 		if err != nil {
 			return fmt.Errorf("failed to encrypt secrets for %s: %w", env, err)
 		}
@@ -131,7 +145,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	if created == 0 {
-		return fmt.Errorf("no environments configured")
+		// Check for pre-existing environment files before erroring
+		existing, _ := filepath.Glob(filepath.Join(outputDir, "secrets.*.enc.yaml"))
+		if len(existing) > 0 {
+			fmt.Println("\nExisting environment secrets files found:")
+			for _, f := range existing {
+				fmt.Printf("  %s\n", filepath.Base(f))
+			}
+		} else {
+			return fmt.Errorf("no environments configured")
+		}
 	}
 
 	fmt.Println("\nYou can now run: cluster-bootstrap bootstrap <environment>")
@@ -196,9 +219,7 @@ func getProviderKey(provider string) (string, error) {
 }
 
 func promptEnvironmentSecrets(env string) (*config.EnvironmentSecrets, error) {
-	fmt.Printf("\n--- Environment: %s ---\n", env)
-
-	repoURL := "git@github.com:user-cube/cluster-bootstrap.git"
+	var repoURL string
 	targetRevision := "main"
 	var sshKeyPath string
 
@@ -243,7 +264,7 @@ func promptEnvironmentSecrets(env string) (*config.EnvironmentSecrets, error) {
 func requiredValidator(msg string) func(s string) error {
 	return func(s string) error {
 		if s == "" {
-			return fmt.Errorf(msg)
+			return fmt.Errorf("%s", msg)
 		}
 		return nil
 	}

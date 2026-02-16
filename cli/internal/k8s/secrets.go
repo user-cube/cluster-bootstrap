@@ -74,4 +74,3 @@ func (c *Client) CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey
 	}
 	return secret, nil
 }
-

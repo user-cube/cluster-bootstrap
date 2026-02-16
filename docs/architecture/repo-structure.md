@@ -4,16 +4,10 @@
 cluster-bootstrap/
 ├── apps/                          # App of Apps Helm chart
 │   ├── Chart.yaml                 # Chart metadata (no dependencies)
-│   ├── templates/                 # Application CR templates
-│   │   ├── argocd.yaml
-│   │   ├── vault.yaml
-│   │   ├── external-secrets.yaml
-│   │   ├── argocd-repo-secret.yaml
-│   │   ├── prometheus-operator-crds.yaml
-│   │   ├── kube-prometheus-stack.yaml
-│   │   ├── reloader.yaml
-│   │   └── trivy-operator.yaml
-│   └── values/                    # Per-environment toggle files
+│   ├── values.yaml                # Default component definitions
+│   ├── templates/
+│   │   └── application.yaml       # Dynamic template (iterates over components)
+│   └── values/                    # Per-environment overrides
 │       ├── dev.yaml
 │       ├── staging.yaml
 │       └── prod.yaml
@@ -42,9 +36,28 @@ cluster-bootstrap/
 
 ## `apps/` — App of Apps
 
-The root Helm chart that ArgoCD deploys. Each template in `apps/templates/` is a Kubernetes `Application` custom resource pointing to one component. The `apps/values/` files control which components are enabled per environment.
+The root Helm chart that ArgoCD deploys. A single dynamic template (`apps/templates/application.yaml`) iterates over the `components` map defined in `apps/values.yaml` and generates one ArgoCD `Application` resource per enabled component.
 
-All environments currently enable the same components, but the structure allows selectively disabling components per environment by setting `<component>: enabled: false`.
+`apps/values.yaml` defines all components with their properties:
+
+- `enabled` — whether to deploy this component (default: `true`)
+- `namespace` — target Kubernetes namespace
+- `syncWave` — ArgoCD sync wave for deployment ordering
+- `hasValues` — whether the component uses Helm value files (default: `true`)
+- `createNamespace` — whether to add `CreateNamespace=true` syncOption (default: `true`)
+- `syncOptions` — additional syncOptions (e.g., `ServerSideApply=true`)
+- `ignoreDifferences` — ArgoCD ignoreDifferences configuration
+
+The `apps/values/` environment files only need to set the `environment` key. To disable a component for a specific environment, override its `enabled` flag:
+
+```yaml
+environment: dev
+components:
+  trivy-operator:
+    enabled: false
+```
+
+Helm performs a deep merge, so all other properties inherit from `apps/values.yaml`.
 
 ## `components/` — Platform Components
 

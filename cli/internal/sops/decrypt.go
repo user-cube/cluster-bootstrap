@@ -28,12 +28,12 @@ func setAgeEnv(opts *Options) (restore func()) {
 		return
 	}
 	prev, hadPrev := os.LookupEnv("SOPS_AGE_KEY_FILE")
-	os.Setenv("SOPS_AGE_KEY_FILE", opts.AgeKeyFile)
+	_ = os.Setenv("SOPS_AGE_KEY_FILE", opts.AgeKeyFile)
 	restore = func() {
 		if hadPrev {
-			os.Setenv("SOPS_AGE_KEY_FILE", prev)
+			_ = os.Setenv("SOPS_AGE_KEY_FILE", prev)
 		} else {
-			os.Unsetenv("SOPS_AGE_KEY_FILE")
+			_ = os.Unsetenv("SOPS_AGE_KEY_FILE")
 		}
 	}
 	return
@@ -156,4 +156,3 @@ func parseAgeRecipientFromConfig(data []byte) (string, error) {
 	}
 	return "", fmt.Errorf("no age recipient found in .sops.yaml")
 }
-

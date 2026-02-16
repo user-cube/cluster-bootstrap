@@ -38,7 +38,7 @@ ArgoCD sync waves ensure components deploy in dependency order:
 | 2 | Prometheus Operator CRDs, ArgoCD Repo Secret, Reloader | CRDs before stack; repo credentials for ArgoCD |
 | 3 | Kube Prometheus Stack, Trivy Operator | Depend on CRDs and secrets being available |
 
-Sync waves are configured via the `argocd.argoproj.io/sync-wave` annotation on each Application template in `apps/templates/`.
+Sync waves are configured via the `syncWave` property of each component in `apps/values.yaml`. The dynamic template applies them as `argocd.argoproj.io/sync-wave` annotations.
 
 ## Self-Managed ArgoCD
 

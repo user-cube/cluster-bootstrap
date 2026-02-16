@@ -55,41 +55,18 @@ upstream-chart-name:
       memory: 32Mi
 ```
 
-## 2. Create the ArgoCD Application template
+## 2. Register in apps/values.yaml
 
-Add a new template in `apps/templates/my-component.yaml`:
+Add an entry to the `components` map in `apps/values.yaml`:
 
 ```yaml
-{{- if .Values.myComponent.enabled }}
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: my-component
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "3"
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
-spec:
-  project: default
-  source:
-    repoURL: {{ .Values.repo.url }}
-    targetRevision: {{ .Values.repo.targetRevision }}
-    path: components/my-component
-    helm:
-      valueFiles:
-        - values/base.yaml
-        - values/{{ .Values.environment }}.yaml
-  destination:
-    server: https://kubernetes.default.svc
+components:
+  # ... existing components ...
+
+  my-component:
+    enabled: true
     namespace: my-namespace
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
-{{- end }}
+    syncWave: "3"
 ```
 
 Choose the sync wave based on dependencies:
@@ -101,19 +78,18 @@ Choose the sync wave based on dependencies:
 | 2 | CRDs, credentials, utilities |
 | 3 | Application-level components |
 
-## 3. Enable in environment values
+### Optional properties
 
-Add the component toggle to each environment file in `apps/values/`:
+| Property | Default | Description |
+|----------|---------|-------------|
+| `hasValues` | `true` | Set to `false` if the component has no `values/base.yaml` or environment values |
+| `createNamespace` | `true` | Set to `false` to skip `CreateNamespace=true` syncOption |
+| `syncOptions` | `[]` | Extra syncOptions (e.g., `ServerSideApply=true`) |
+| `ignoreDifferences` | `[]` | ArgoCD ignoreDifferences rules |
 
-```yaml
-# apps/values/dev.yaml
-myComponent:
-  enabled: true
-```
+That's it — the dynamic template in `apps/templates/application.yaml` will automatically generate the ArgoCD `Application` resource for the new component. No template file needs to be created.
 
-Repeat for `staging.yaml` and `prod.yaml`.
-
-## 4. Verify with helm template
+## 3. Verify with helm template
 
 Before pushing, verify the Application template renders correctly:
 
@@ -128,12 +104,26 @@ Check that:
 - The values file paths are correct
 - The namespace matches your component's expectation
 
-## 5. Push and sync
+## 4. Push and sync
 
 Commit and push. ArgoCD will detect the new Application in the App of Apps and deploy it.
 
 ```bash
-git add components/my-component/ apps/templates/my-component.yaml apps/values/
+git add components/my-component/ apps/values.yaml
 git commit -m "feat: add my-component"
 git push
 ```
+
+## Disabling a component
+
+To disable a component for a specific environment, override its `enabled` flag in the environment values file:
+
+```yaml
+# apps/values/dev.yaml
+environment: dev
+components:
+  my-component:
+    enabled: false
+```
+
+Helm deep-merges environment values with the defaults, so only the overridden property changes.
