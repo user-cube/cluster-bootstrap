@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/user-cube/cluster-bootstrap/compare/v1.2.0...v1.2.1) (2026-02-16)
+
+
+### Bug Fixes
+
+* **deps:** update module helm.sh/helm/v3 to v4 ([#25](https://github.com/user-cube/cluster-bootstrap/issues/25)) ([af5e44b](https://github.com/user-cube/cluster-bootstrap/commit/af5e44b7e4ce1bf2c741242d5a966e08e2b9b892))
+
 # [1.2.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.1.6...v1.2.0) (2026-02-16)
 
 
