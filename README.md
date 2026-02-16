@@ -67,13 +67,15 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
 ```
 CLI bootstrap  →  ArgoCD + App of Apps (root Application)
                         ↓
-                   apps/ (Helm chart generating Application CRs)
+                   apps/ (Helm chart with dynamic template)
                         ↓
               components/argocd/  (self-managed ArgoCD)
               components/xxx/    (other components)
 ```
 
 ArgoCD manages itself — changes pushed to this repo are automatically synced.
+
+The `apps/` chart uses a **single dynamic template** that iterates over a `components` map defined in `apps/values.yaml`. Adding a new component requires only a new entry in the values — no template files to create or copy.
 
 ## Components
 
@@ -141,3 +143,13 @@ SOPS_CONFIG=/path/to/custom/.sops.yaml
 | dev | `apps/values/dev.yaml` | Local/development clusters, minimal resources |
 | staging | `apps/values/staging.yaml` | Pre-production, moderate resources |
 | prod | `apps/values/prod.yaml` | Production, HA configuration |
+
+Environment files only need to set the `environment` key. Component defaults (namespace, sync wave, syncOptions, etc.) are defined in `apps/values.yaml`. To disable a component per environment:
+
+```yaml
+# apps/values/dev.yaml
+environment: dev
+components:
+  trivy-operator:
+    enabled: false
+```

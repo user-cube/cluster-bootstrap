@@ -65,34 +65,28 @@ Dev environments use minimal resources suitable for local clusters (kind, miniku
 
 ## App of Apps Values
 
-The `apps/values/<env>.yaml` files control which components are enabled:
+Component defaults (namespace, sync wave, syncOptions, etc.) are defined in `apps/values.yaml`. The environment files in `apps/values/` only need to set the environment name:
 
 ```yaml
+# apps/values/dev.yaml
 environment: dev
-repo:
-  url: git@github.com:user-cube/cluster-bootstrap.git
-  targetRevision: main
-argocd:
-  enabled: true
-vault:
-  enabled: true
-externalSecrets:
-  enabled: true
-argocdRepoSecret:
-  enabled: true
-kubePrometheusStack:
-  enabled: true
-reloader:
-  enabled: true
-trivyOperator:
-  enabled: true
 ```
 
-Currently all environments enable all components. To disable a component for a specific environment, set its `enabled` flag to `false`.
+All components are enabled by default. To disable a component for a specific environment, override its `enabled` flag:
+
+```yaml
+# apps/values/dev.yaml
+environment: dev
+components:
+  trivy-operator:
+    enabled: false
+```
+
+Helm performs a deep merge, so only the overridden properties change — the rest inherits from `apps/values.yaml`.
 
 ## Adding a New Environment
 
-1. Create `apps/values/<env>.yaml` with component toggles
+1. Create `apps/values/<env>.yaml` with `environment: <env>`
 2. Create `values/<env>.yaml` in each component under `components/`
 3. Create `secrets.<env>.enc.yaml` with encrypted credentials
 4. Bootstrap with `./cli/cluster-bootstrap bootstrap <env>`
