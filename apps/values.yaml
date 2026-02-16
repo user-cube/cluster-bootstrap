@@ -9,6 +9,8 @@ components:
     enabled: true
     namespace: argocd
     syncWave: "0"
+    syncOptions:
+      - ServerSideApply=true
 
   vault:
     enabled: true
@@ -19,6 +21,8 @@ components:
     enabled: true
     namespace: external-secrets
     syncWave: "1"
+    syncOptions:
+      - ServerSideApply=true
 
   argocd-repo-secret:
     enabled: true

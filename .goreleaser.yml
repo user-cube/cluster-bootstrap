@@ -1,3 +1,5 @@
+version: 2
+
 project_name: cluster-bootstrap
 
 before:
@@ -20,11 +22,12 @@ builds:
       - -s -w
 
 archives:
-  - format: tar.gz
+  - formats:
+      - tar.gz
     name_template: "{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}"
 
 checksum:
   name_template: "checksums.txt"
 
 changelog:
-  skip: true
+  disable: true
