@@ -34,11 +34,27 @@ tasks:
       - task: cli:vet
 
   helm-lint:
-    desc: Lint all Helm charts that contain templates
+    desc: Lint all Helm charts
     cmds:
-      - helm lint apps/
-      - helm lint components/argocd-repo-secret/
-      - helm lint components/vault/
+      - |
+        helm lint apps/
+        for chart in components/*/; do
+          if grep -q "^dependencies:" "$chart/Chart.yaml"; then
+            helm dependency build "$chart"
+          fi
+          values_args=""
+          if [ -f "$chart/values/base.yaml" ]; then
+            values_args="-f $chart/values/base.yaml"
+          fi
+          helm lint "$chart" $values_args
+        done
+
+  helm-template:
+    desc: Render Helm templates for a given environment
+    vars:
+      ENV: '{{.ENV | default "dev"}}'
+    cmds:
+      - helm template apps/ -f apps/values/{{.ENV}}.yaml
 
   docs-serve:
     desc: Serve MkDocs documentation locally

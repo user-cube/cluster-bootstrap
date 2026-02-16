@@ -15,6 +15,14 @@ components:
     namespace: vault
     syncWave: "1"
 
+  external-secrets-crds:
+    enabled: true
+    namespace: external-secrets
+    syncWave: "0"
+    syncOptions:
+      - ServerSideApply=true
+      - Replace=true
+
   external-secrets:
     enabled: true
     namespace: external-secrets

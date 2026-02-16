@@ -1,0 +1,9 @@
+external-secrets:
+  installCRDs: true
+  replicaCount: 0
+  webhook:
+    create: false
+  certController:
+    create: false
+  serviceAccount:
+    create: false

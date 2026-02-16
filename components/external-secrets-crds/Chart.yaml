@@ -1,0 +1,9 @@
+apiVersion: v2
+name: external-secrets-crds
+description: External Secrets Operator CRDs
+version: 1.0.0
+type: application
+dependencies:
+  - name: external-secrets
+    version: 0.14.3
+    repository: https://charts.external-secrets.io
