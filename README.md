@@ -19,7 +19,8 @@ Online documentation available at [Cluster Boostrap Docs](https://user-cube.gith
 - `helm` (for local template testing)
 - `sops` and `age` (for secrets encryption/decryption)
 - `go` 1.25+ (to build the CLI)
-- `task` (task runner for CLI development)
+- `task` ([Task runner](https://taskfile.dev/))
+- `pre-commit` ([pre-commit hooks](https://pre-commit.com/))
 - SSH private key with read access to this repo
 
 ## Quick Start
@@ -27,7 +28,6 @@ Online documentation available at [Cluster Boostrap Docs](https://user-cube.gith
 ### 1. Build the CLI
 
 ```bash
-cd cli
 task build
 ```
 
@@ -95,6 +95,44 @@ ArgoCD manages itself — changes pushed to this repo are automatically synced.
 | `bootstrap <env>` | Full cluster bootstrap (decrypt secrets, install ArgoCD, deploy App of Apps) |
 | `init` | Interactive setup for SOPS config and encrypted secrets files |
 | `vault-token` | Store Vault root token as Kubernetes secret |
+
+## Development
+
+### Setup
+
+```bash
+pre-commit install
+```
+
+### Available tasks
+
+Run `task --list` to see all available tasks. The most common ones:
+
+```bash
+task test         # Run Go tests with coverage
+task lint         # Run golangci-lint
+task helm-lint    # Lint Helm charts with templates
+task fmt          # Format Go source files
+task vet          # Run Go vet
+task docs-serve   # Serve MkDocs documentation locally
+```
+
+### Secrets example
+
+`secrets.example.enc.yaml` contains the expected secrets structure. To create a new environment:
+
+```bash
+cp secrets.example.enc.yaml secrets.myenv.enc.yaml
+sops --encrypt --in-place secrets.myenv.enc.yaml
+```
+
+Or use the CLI interactively: `./cli/cluster-bootstrap init myenv`
+
+To use a custom `.sops.yaml` path, set `SOPS_CONFIG` in your `.env`:
+
+```bash
+SOPS_CONFIG=/path/to/custom/.sops.yaml
+```
 
 ## Environments
 

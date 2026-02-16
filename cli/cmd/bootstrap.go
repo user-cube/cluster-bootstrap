@@ -113,7 +113,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 }
 
 func printDryRun(envSecrets *config.EnvironmentSecrets, env string) error {
-	fmt.Println("\n--- DRY RUN: Kubernetes Secrets ---\n")
+	fmt.Println("\n--- DRY RUN: Kubernetes Secrets ---")
 
 	// Repo SSH secret
 	repoSecret := map[string]interface{}{
@@ -142,7 +142,7 @@ func printDryRun(envSecrets *config.EnvironmentSecrets, env string) error {
 
 	// App of Apps
 	fmt.Println("---")
-	fmt.Println("\n--- DRY RUN: App of Apps Application ---\n")
+	fmt.Println("\n--- DRY RUN: App of Apps Application ---")
 	appOfApps := map[string]interface{}{
 		"apiVersion": "argoproj.io/v1alpha1",
 		"kind":       "Application",

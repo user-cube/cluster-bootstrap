@@ -156,4 +156,3 @@ func parseAgeRecipientFromConfig(data []byte) (string, error) {
 	}
 	return "", fmt.Errorf("no age recipient found in .sops.yaml")
 }
-

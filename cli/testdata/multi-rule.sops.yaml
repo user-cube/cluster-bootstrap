@@ -1,0 +1,5 @@
+creation_rules:
+    - path_regex: secrets\.dev\.enc\.yaml$
+      age: age1dev000000000000000000000000000000000000000000000000000000000
+    - path_regex: secrets\.prod\.enc\.yaml$
+      age: age1prod00000000000000000000000000000000000000000000000000000000

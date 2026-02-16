@@ -1,0 +1,46 @@
+version: "3"
+
+includes:
+  cli:
+    taskfile: cli/Taskfile.yml
+    dir: cli
+
+tasks:
+  build:
+    desc: Build the CLI binary
+    cmds:
+      - task: cli:build
+
+  test:
+    desc: Run Go tests with coverage
+    dir: cli
+    cmds:
+      - go test -cover ./...
+
+  lint:
+    desc: Run golangci-lint on the CLI
+    dir: cli
+    cmds:
+      - golangci-lint run ./...
+
+  fmt:
+    desc: Format Go source files
+    cmds:
+      - task: cli:fmt
+
+  vet:
+    desc: Run Go vet
+    cmds:
+      - task: cli:vet
+
+  helm-lint:
+    desc: Lint all Helm charts that contain templates
+    cmds:
+      - helm lint apps/
+      - helm lint components/argocd-repo-secret/
+      - helm lint components/vault/
+
+  docs-serve:
+    desc: Serve MkDocs documentation locally
+    cmds:
+      - mkdocs serve
