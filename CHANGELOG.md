@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.1.6...v1.2.0) (2026-02-16)
+
+
+### Features
+
+* add support for gitcrypt; add support for non-root path ([#22](https://github.com/user-cube/cluster-bootstrap/issues/22)) ([e0ae972](https://github.com/user-cube/cluster-bootstrap/commit/e0ae9726c33113931d479fd8989355366d2feba3))
+
 ## [1.1.6](https://github.com/user-cube/cluster-bootstrap/compare/v1.1.5...v1.1.6) (2026-02-16)
 
 
