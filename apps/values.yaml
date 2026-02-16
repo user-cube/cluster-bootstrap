@@ -21,6 +21,7 @@ components:
     syncWave: "1"
     syncOptions:
       - ServerSideApply=true
+      - Replace=true
 
   argocd-repo-secret:
     enabled: true
