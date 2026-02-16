@@ -73,6 +73,7 @@ func loadChartConfig(baseDir, dependencyName string) (name, version, repoURL str
 // InstallArgoCD installs or upgrades ArgoCD using the Helm SDK.
 // It loads values from components/argocd/values/base.yaml and values/<env>.yaml,
 // then runs helm upgrade --install with --wait.
+// Returns helpful error messages for common failure scenarios.
 func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir string, verbose bool) error {
 	settings := cli.New()
 	settings.SetNamespace(argoCDNamespace)
@@ -97,19 +98,19 @@ func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir st
 	// Read chart name, version and repo from components/argocd/Chart.yaml
 	chartName, chartVersion, repoURL, err := loadChartConfig(baseDir, argoCDChartDep)
 	if err != nil {
-		return fmt.Errorf("failed to load chart config: %w", err)
+		return fmt.Errorf("failed to load chart config: %w\n  hint: ensure components/argocd/Chart.yaml exists and has the argo-cd dependency defined", err)
 	}
 
 	// Download the chart
 	chartPath, err := fetchChart(settings, chartName, chartVersion, repoURL, verbose)
 	if err != nil {
-		return fmt.Errorf("failed to fetch chart: %w", err)
+		return fmt.Errorf("%w\n  hint: verify the Helm repository is accessible and the chart version exists\n  tip: try: helm repo add argo https://argoproj.github.io/argo-helm && helm repo update", err)
 	}
 
 	// Load the chart
 	chart, err := loader.Load(chartPath)
 	if err != nil {
-		return fmt.Errorf("failed to load chart: %w", err)
+		return fmt.Errorf("failed to load chart: %w\n  hint: verify the downloaded chart is not corrupted", err)
 	}
 
 	// Load and merge values
@@ -138,7 +139,16 @@ func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir st
 
 		rel, err := install.RunWithContext(ctx, chart, vals)
 		if err != nil {
-			return fmt.Errorf("failed to install ArgoCD: %w", err)
+			errMsg := err.Error()
+			hint := "verify ArgoCD is not already installed and chart values are valid"
+			if strings.Contains(errMsg, "timeout") {
+				hint = "Helm install timed out. Check cluster resources and pod status: kubectl get pods -n argocd -w"
+			} else if strings.Contains(errMsg, "permission denied") || strings.Contains(errMsg, "Forbidden") {
+				hint = "permission denied. Verify your cluster role permissions to create resources in the argocd namespace"
+			} else if strings.Contains(errMsg, "imagePull") || strings.Contains(errMsg, "ErrImagePull") {
+				hint = "image pull failed. Verify container images are accessible and image pull secrets are configured"
+			}
+			return fmt.Errorf("failed to install ArgoCD: %w\n  hint: %s", err, hint)
 		}
 		if verbose {
 			fmt.Printf("  Release %s installed, status: %s\n", rel.Name, rel.Info.Status)
@@ -153,7 +163,14 @@ func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir st
 
 	rel, err := upgrade.RunWithContext(ctx, argoCDRelease, chart, vals)
 	if err != nil {
-		return fmt.Errorf("failed to upgrade ArgoCD: %w", err)
+		errMsg := err.Error()
+		hint := "verify ArgoCD release configuration and chart values"
+		if strings.Contains(errMsg, "timeout") {
+			hint = "Helm upgrade timed out. Check pod status: kubectl rollout status deploy/argocd-server -n argocd"
+		} else if strings.Contains(errMsg, "permission denied") || strings.Contains(errMsg, "Forbidden") {
+			hint = "permission denied. Verify your cluster role permissions to upgrade resources in the argocd namespace"
+		}
+		return fmt.Errorf("failed to upgrade ArgoCD: %w\n  hint: %s", err, hint)
 	}
 
 	if verbose {

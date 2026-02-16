@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 var (
 	secretsFile       string
 	dryRun            bool
+	dryRunOutput      string
 	skipArgoCDInstall bool
 	kubeconfig        string
 	kubeContext       string
@@ -42,6 +44,7 @@ Replaces the manual install.sh process.`,
 func init() {
 	bootstrapCmd.Flags().StringVar(&secretsFile, "secrets-file", "", "path to secrets file (default: secrets.<env>.enc.yaml or secrets.<env>.yaml)")
 	bootstrapCmd.Flags().BoolVar(&dryRun, "dry-run", false, "print manifests without applying")
+	bootstrapCmd.Flags().StringVar(&dryRunOutput, "dry-run-output", "", "write dry-run manifests to file")
 	bootstrapCmd.Flags().BoolVar(&skipArgoCDInstall, "skip-argocd-install", false, "skip ArgoCD installation")
 	bootstrapCmd.Flags().StringVar(&kubeconfig, "kubeconfig", "", "path to kubeconfig file")
 	bootstrapCmd.Flags().StringVar(&kubeContext, "context", "", "kubeconfig context to use")
@@ -55,34 +58,40 @@ func init() {
 
 func runBootstrap(cmd *cobra.Command, args []string) error {
 	env := args[0]
+	logger := NewLogger(verbose)
+
+	// Run preflight checks
+	if err := PreflightChecks(encryption, bootstrapAgeKey, verbose); err != nil {
+		return err
+	}
 
 	stepf("Bootstrapping cluster for environment: %s", env)
 	if err := validateBootstrapInputs(env); err != nil {
-		return err
-	}
-	if verbose {
-		fmt.Printf("  Base dir: %s\n", baseDir)
-		fmt.Printf("  App path: %s\n", appPath)
-		fmt.Printf("  Encryption: %s\n", encryption)
-		if kubeconfig != "" {
-			fmt.Printf("  Kubeconfig: %s\n", kubeconfig)
-		} else {
-			fmt.Println("  Kubeconfig: default")
-		}
-		if kubeContext != "" {
-			fmt.Printf("  Context: %s\n", kubeContext)
-		}
-		fmt.Printf("  Dry run: %t\n", dryRun)
-		fmt.Printf("  Skip ArgoCD install: %t\n", skipArgoCDInstall)
-		if bootstrapAgeKey != "" {
-			fmt.Printf("  Age key file: %s\n", bootstrapAgeKey)
-		}
-		if gitcryptKeyFile != "" {
-			fmt.Printf("  Git-crypt key file: %s\n", gitcryptKeyFile)
-		}
+		return fmt.Errorf("validation failed: %w", err)
 	}
 
+	// Log configuration
+	configStage := logger.Stage("Configuration")
+	configStage.Detail("Environment: %s", env)
+	configStage.Detail("Base directory: %s", baseDir)
+	configStage.Detail("App path: %s", appPath)
+	configStage.Detail("Encryption: %s", encryption)
+	if kubeconfig != "" {
+		configStage.Detail("Kubeconfig: %s", kubeconfig)
+	}
+	if kubeContext != "" {
+		configStage.Detail("Context: %s", kubeContext)
+	}
+	if dryRun {
+		configStage.Detail("⚠ DRY RUN mode - no changes will be applied")
+	}
+	if skipArgoCDInstall {
+		configStage.Detail("⚠ Skipping ArgoCD installation")
+	}
+	configStage.Done()
+
 	// Load secrets based on encryption backend
+	secretsStage := logger.Stage("Loading Secrets")
 	var envSecrets *config.EnvironmentSecrets
 	var err error
 
@@ -94,30 +103,40 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 			sf = filepath.Join(baseDir, config.SecretsFileNamePlain(env))
 		}
 		secretsPath = sf
+		if err := validateSecretsFileExists(secretsPath); err != nil {
+			return err
+		}
+		secretsStage.Detail("Loading plaintext secrets from %s", sf)
 		stepf("Loading plaintext secrets from %s...", sf)
 		envSecrets, err = config.LoadSecretsPlaintext(sf)
 		if err != nil {
 			return err
 		}
+		secretsStage.Detail("✓ Secrets loaded successfully")
 	case "sops":
 		sf := secretsFile
 		if sf == "" {
 			sf = filepath.Join(baseDir, config.SecretsFileName(env))
 		}
 		secretsPath = sf
+		if err := validateSecretsFileExists(secretsPath); err != nil {
+			return err
+		}
+		secretsStage.Detail("Decrypting secrets from %s", sf)
 		stepf("Decrypting secrets from %s...", sf)
 		sopsOpts := &sops.Options{AgeKeyFile: bootstrapAgeKey}
 		envSecrets, err = config.LoadSecrets(sf, sopsOpts)
 		if err != nil {
 			return err
 		}
+		secretsStage.Detail("✓ Secrets decrypted successfully")
 	default:
 		return fmt.Errorf("unsupported encryption backend: %s (use sops or git-crypt)", encryption)
 	}
 
-	if verbose && secretsPath != "" {
-		fmt.Printf("  Secrets file: %s\n", secretsPath)
-	}
+	secretsStage.Detail("Repository: %s", envSecrets.Repo.URL)
+	secretsStage.Detail("Target revision: %s", envSecrets.Repo.TargetRevision)
+	secretsStage.Done()
 
 	if verbose {
 		fmt.Printf("  Repo URL: %s\n", envSecrets.Repo.URL)
@@ -129,21 +148,28 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create k8s client
+	k8sStage := logger.Stage("Kubernetes Client")
 	client, err := k8s.NewClient(kubeconfig, kubeContext)
 	if err != nil {
-		return fmt.Errorf("failed to create kubernetes client: %w", err)
+		return err
 	}
+	k8sStage.Detail("✓ Connected to cluster")
+	k8sStage.Done()
 
 	ctx := context.Background()
 
 	// Create Kubernetes secrets (before Helm install, as the chart may reference them)
+	secretsK8sStage := logger.Stage("Creating K8s Secrets")
 	stepf("Creating Kubernetes secrets...")
 	if err := client.EnsureNamespace(ctx, "argocd"); err != nil {
 		return err
 	}
+	secretsK8sStage.Detail("✓ Created/verified namespace 'argocd'")
+
 	if _, err := client.CreateRepoSSHSecret(ctx, envSecrets.Repo.URL, envSecrets.Repo.SSHPrivateKey, false); err != nil {
 		return err
 	}
+	secretsK8sStage.SecretDetail("Created", "repo-ssh-key", "argocd")
 
 	// If git-crypt key file provided, store it as a K8s secret
 	if gitcryptKeyFile != "" {
@@ -155,25 +181,36 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		if err := client.CreateGitCryptKeySecret(ctx, keyData); err != nil {
 			return err
 		}
+		secretsK8sStage.SecretDetail("Created", "git-crypt-key", "argocd")
 	}
+	secretsK8sStage.Done()
 
 	// Install ArgoCD via Helm
 	if !skipArgoCDInstall {
+		helmStage := logger.Stage("Installing ArgoCD via Helm")
 		stepf("Installing ArgoCD via Helm...")
 		if err := helm.InstallArgoCD(ctx, kubeconfig, kubeContext, env, baseDir, verbose); err != nil {
 			return fmt.Errorf("failed to install ArgoCD: %w", err)
 		}
+		helmStage.Detail("✓ ArgoCD installed successfully")
+		helmStage.Done()
 	}
 
 	// Apply App of Apps
+	appStage := logger.Stage("Deploying App of Apps")
 	stepf("Applying App of Apps for environment: %s", env)
 	if _, err := client.ApplyAppOfApps(ctx, envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, env, appPath, false); err != nil {
 		return err
 	}
+	appStage.Detail("✓ App of Apps created successfully")
+	appStage.Detail("ArgoCD will automatically sync enabled components")
+	appStage.Done()
 
 	// Print access instructions
 	fmt.Println()
 	successf("Done! ArgoCD is installed and the app-of-apps root Application has been created.")
+	logger.PrintStageSummary()
+	printBootstrapSummary(env, secretsPath)
 	fmt.Println("    Access the ArgoCD UI:")
 	fmt.Println("      kubectl port-forward svc/argocd-server -n argocd 8080:443")
 	fmt.Println("    Get the initial admin password:")
@@ -183,17 +220,40 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 }
 
 func printDryRun(envSecrets *config.EnvironmentSecrets, env, appPath string) error {
-	fmt.Println("\n--- DRY RUN: Kubernetes Secrets ---")
-
-	repoSecret, appOfApps := buildDryRunObjects(envSecrets, env, appPath)
-	printYAMLish(repoSecret)
-
-	// App of Apps
-	fmt.Println("---")
-	fmt.Println("\n--- DRY RUN: App of Apps Application ---")
-	printYAMLish(appOfApps)
-
+	output, err := renderDryRunOutput(envSecrets, env, appPath)
+	if err != nil {
+		return err
+	}
+	if dryRunOutput != "" {
+		if err := os.WriteFile(dryRunOutput, []byte(output), 0644); err != nil {
+			return fmt.Errorf("failed to write dry-run output: %w", err)
+		}
+	}
+	fmt.Print(output)
 	return nil
+}
+
+func renderDryRunOutput(envSecrets *config.EnvironmentSecrets, env, appPath string) (string, error) {
+	repoSecret, appOfApps := buildDryRunObjects(envSecrets, env, appPath)
+
+	repoJSON, err := json.MarshalIndent(repoSecret, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal repo secret: %w", err)
+	}
+	appJSON, err := json.MarshalIndent(appOfApps, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal app of apps: %w", err)
+	}
+
+	var out bytes.Buffer
+	out.WriteString("\n--- DRY RUN: Kubernetes Secrets ---\n")
+	out.Write(repoJSON)
+	out.WriteString("\n---\n")
+	out.WriteString("\n--- DRY RUN: App of Apps Application ---\n")
+	out.Write(appJSON)
+	out.WriteString("\n")
+
+	return out.String(), nil
 }
 
 func buildDryRunObjects(envSecrets *config.EnvironmentSecrets, env, appPath string) (map[string]interface{}, map[string]interface{}) {
@@ -350,4 +410,32 @@ func printYAMLish(obj interface{}) {
 		return
 	}
 	fmt.Println(string(data))
+}
+
+func printBootstrapSummary(env, secretsPath string) {
+	fmt.Println("\nSummary:")
+	fmt.Printf("  Environment: %s\n", env)
+	if secretsPath != "" {
+		fmt.Printf("  Secrets file: %s\n", secretsPath)
+	}
+	fmt.Printf("  App path: %s\n", appPath)
+	fmt.Printf("  Encryption: %s\n", encryption)
+	if skipArgoCDInstall {
+		fmt.Println("  ArgoCD install: skipped")
+	} else {
+		fmt.Println("  ArgoCD install: attempted")
+	}
+	if gitcryptKeyFile != "" {
+		fmt.Printf("  Git-crypt key: %s\n", gitcryptKeyFile)
+	}
+}
+
+func validateSecretsFileExists(path string) error {
+	if path == "" {
+		return nil
+	}
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("secrets file not found: %s", path)
+	}
+	return nil
 }

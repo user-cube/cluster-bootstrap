@@ -70,12 +70,17 @@ This performs the following steps:
 # Dry run — print manifests without applying
 ./cli/cluster-bootstrap bootstrap dev --dry-run
 
+# Dry run — write manifests to a file
+./cli/cluster-bootstrap bootstrap dev --dry-run --dry-run-output /tmp/bootstrap.json
+
 # Skip ArgoCD Helm install (if already installed)
 ./cli/cluster-bootstrap bootstrap dev --skip-argocd-install
 
 # Repo content in a subdirectory with custom app path
 ./cli/cluster-bootstrap --base-dir ./k8s bootstrap dev --app-path k8s/apps
 ```
+
+Note: when using `--secrets-file` or the auto-detected secrets path, the file must already exist.
 
 ## 4. Access ArgoCD
 

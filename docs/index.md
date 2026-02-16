@@ -31,6 +31,7 @@ This repo provides a fully automated, reproducible way to bootstrap a Kubernetes
 
 - [Prerequisites](getting-started/prerequisites.md) — what you need before starting
 - [Quick Start](getting-started/quick-start.md) — bootstrap a cluster in minutes
+- [Troubleshooting](guides/troubleshooting.md) — common issues and solutions
 - [Architecture](architecture/overview.md) — how the App of Apps pattern works
 - [Adding a Component](guides/adding-a-component.md) — extend the stack with new components
 - [Secrets Management](guides/secrets-management.md) — how encrypted secrets flow through the system

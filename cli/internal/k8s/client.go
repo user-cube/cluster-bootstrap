@@ -31,21 +31,37 @@ func NewClient(kubeconfig, context string) (*Client, error) {
 	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		loadingRules, configOverrides).ClientConfig()
 	if err != nil {
-		return nil, fmt.Errorf("failed to build kubeconfig: %w", err)
+		return nil, wrapKubeconfigError(err, kubeconfig, context)
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create kubernetes client: %w", err)
+		return nil, wrapClusterConnectionError(err)
 	}
 
 	dynClient, err := dynamic.NewForConfig(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create dynamic client: %w", err)
+		return nil, wrapClusterConnectionError(err)
 	}
 
 	return &Client{
 		Clientset:     clientset,
 		DynamicClient: dynClient,
 	}, nil
+}
+
+// wrapKubeconfigError enhances error messages for kubeconfig issues.
+func wrapKubeconfigError(err error, kubeconfig, context string) error {
+	if kubeconfig != "" {
+		return fmt.Errorf("failed to load kubeconfig %s: %w\n  hint: verify the file exists and is readable", kubeconfig, err)
+	}
+	if context != "" {
+		return fmt.Errorf("context %s not found in kubeconfig: %w\n  hint: verify the context with: kubectl config get-contexts", context, err)
+	}
+	return fmt.Errorf("failed to load kubeconfig: %w\n  hint: ensure kubectl is configured. Check: kubectl config view", err)
+}
+
+// wrapClusterConnectionError enhances error messages for cluster connection issues.
+func wrapClusterConnectionError(err error) error {
+	return fmt.Errorf("failed to connect to cluster: %w\n  hint: verify cluster is accessible and kubeconfig credentials are valid\n  tip: try: kubectl cluster-info", err)
 }

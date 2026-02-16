@@ -34,6 +34,24 @@ func TestBuildDryRunObjects(t *testing.T) {
 	assert.Equal(t, "main", source["targetRevision"])
 }
 
+func TestRenderDryRunOutput_Golden(t *testing.T) {
+	envSecrets := &config.EnvironmentSecrets{
+		Repo: config.RepoSecrets{
+			URL:            "ssh://git@example.com/repo.git",
+			TargetRevision: "main",
+			SSHPrivateKey:  "test-key",
+		},
+	}
+
+	output, err := renderDryRunOutput(envSecrets, "dev", "apps")
+	require.NoError(t, err)
+
+	goldenPath := filepath.Join("testdata", "dry-run.dev.golden.txt")
+	golden, err := os.ReadFile(goldenPath)
+	require.NoError(t, err)
+	assert.Equal(t, string(golden), output)
+}
+
 func TestValidateBootstrapInputs(t *testing.T) {
 	prevBaseDir := baseDir
 	prevAppPath := appPath

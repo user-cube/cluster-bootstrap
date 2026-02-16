@@ -1,0 +1,58 @@
+
+--- DRY RUN: Kubernetes Secrets ---
+{
+  "apiVersion": "v1",
+  "kind": "Secret",
+  "metadata": {
+    "annotations": {
+      "cluster-bootstrap/managed-by": "external-secrets",
+      "cluster-bootstrap/origin": "bootstrap",
+      "managed-by": "argocd.argoproj.io"
+    },
+    "labels": {
+      "argocd.argoproj.io/secret-type": "repo-creds"
+    },
+    "name": "repo-ssh-key",
+    "namespace": "argocd"
+  },
+  "stringData": {
+    "sshPrivateKey": "test-key",
+    "type": "git",
+    "url": "ssh://git@example.com/repo.git"
+  },
+  "type": "Opaque"
+}
+---
+
+--- DRY RUN: App of Apps Application ---
+{
+  "apiVersion": "argoproj.io/v1alpha1",
+  "kind": "Application",
+  "metadata": {
+    "name": "app-of-apps",
+    "namespace": "argocd"
+  },
+  "spec": {
+    "destination": {
+      "namespace": "argocd",
+      "server": "https://kubernetes.default.svc"
+    },
+    "project": "default",
+    "source": {
+      "helm": {
+        "valueFiles": [
+          "values/dev.yaml"
+        ]
+      },
+      "path": "apps",
+      "repoURL": "ssh://git@example.com/repo.git",
+      "targetRevision": "main"
+    },
+    "syncPolicy": {
+      "automated": {
+        "prune": true,
+        "selfHeal": true
+      }
+    }
+  }
+}

@@ -2,8 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
@@ -93,6 +96,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// Create per-environment secrets files
 	created := 0
+	var createdFiles []string
+	sopsConfigUpdated := false
 
 	for _, env := range environments {
 		fmt.Printf("\n--- Environment: %s ---\n", env)
@@ -116,9 +121,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 
 		if envProvider == "git-crypt" {
-			count, err := initGitCrypt(effectiveOutputDir, env)
+			count, createdFile, err := initGitCrypt(effectiveOutputDir, env)
 			if err != nil {
 				return err
+			}
+			if createdFile != "" {
+				createdFiles = append(createdFiles, createdFile)
 			}
 			created += count
 			continue
@@ -135,6 +143,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		fmt.Printf("Updated %s with rule for %s\n", sopsConfigPath, env)
+		sopsConfigUpdated = true
 
 		// Create encrypted secrets file
 		outputFile := filepath.Join(effectiveOutputDir, config.SecretsFileName(env))
@@ -178,6 +187,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 
 		fmt.Printf("Created %s (encrypted)\n", outputFile)
+		createdFiles = append(createdFiles, outputFile)
 		created++
 	}
 
@@ -196,22 +206,35 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if sopsConfigUpdated || len(createdFiles) > 0 {
+		fmt.Println("\nSummary:")
+		if sopsConfigUpdated {
+			fmt.Printf("  Updated config: %s\n", sopsConfigPath)
+		}
+		if len(createdFiles) > 0 {
+			fmt.Println("  Created secrets files:")
+			for _, f := range createdFiles {
+				fmt.Printf("    - %s\n", f)
+			}
+		}
+	}
+
 	fmt.Println("\nYou can now run: cluster-bootstrap bootstrap <environment>")
 
 	return nil
 }
 
 // initGitCrypt handles the git-crypt provider path for a single environment.
-func initGitCrypt(outputDir, env string) (int, error) {
+func initGitCrypt(outputDir, env string) (int, string, error) {
 	// Verify git-crypt is initialised in the repo
 	gitCryptDir := filepath.Join(outputDir, ".git", "git-crypt")
 	if _, err := os.Stat(gitCryptDir); os.IsNotExist(err) {
-		return 0, fmt.Errorf("git-crypt not initialised: %s not found. Run 'git-crypt init' first", gitCryptDir)
+		return 0, "", fmt.Errorf("git-crypt not initialised: %s not found. Run 'git-crypt init' first", gitCryptDir)
 	}
 
 	// Ensure .gitattributes has the git-crypt pattern
 	if err := config.EnsureGitCryptAttributes(outputDir); err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	fmt.Printf("Ensured .gitattributes has git-crypt pattern\n")
 
@@ -224,29 +247,29 @@ func initGitCrypt(outputDir, env string) (int, error) {
 			Value(&overwrite).
 			Run()
 		if err != nil {
-			return 0, fmt.Errorf("prompt failed: %w", err)
+			return 0, "", fmt.Errorf("prompt failed: %w", err)
 		}
 		if !overwrite {
-			return 0, nil
+			return 0, "", nil
 		}
 	}
 
 	envSecrets, err := promptEnvironmentSecrets(env)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 
 	plaintextData, err := yaml.Marshal(envSecrets)
 	if err != nil {
-		return 0, fmt.Errorf("failed to marshal secrets: %w", err)
+		return 0, "", fmt.Errorf("failed to marshal secrets: %w", err)
 	}
 
 	if err := os.WriteFile(outputFile, plaintextData, 0600); err != nil {
-		return 0, fmt.Errorf("failed to write %s: %w", outputFile, err)
+		return 0, "", fmt.Errorf("failed to write %s: %w", outputFile, err)
 	}
 
 	fmt.Printf("Created %s (plaintext — git-crypt encrypts on commit)\n", outputFile)
-	return 1, nil
+	return 1, outputFile, nil
 }
 
 func getProviderKey(provider string) (string, error) {
@@ -315,11 +338,11 @@ func promptEnvironmentSecrets(env string) (*config.EnvironmentSecrets, error) {
 			huh.NewInput().
 				Title("Repository SSH URL").
 				Value(&repoURL).
-				Validate(requiredValidator("repository URL is required")),
+				Validate(validateRepoURL),
 			huh.NewInput().
 				Title("Target revision (branch/tag)").
 				Value(&targetRevision).
-				Validate(requiredValidator("target revision is required")),
+				Validate(validateTargetRevision),
 			huh.NewInput().
 				Title("Path to SSH private key file").
 				Value(&sshKeyPath).
@@ -355,4 +378,38 @@ func requiredValidator(msg string) func(s string) error {
 		}
 		return nil
 	}
+}
+
+var scpLikeRepoURL = regexp.MustCompile(`^[^@\s]+@[^:\s]+:.+`)
+
+func validateRepoURL(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fmt.Errorf("repository URL is required")
+	}
+	if strings.Contains(value, " ") {
+		return fmt.Errorf("repository URL must not contain spaces")
+	}
+	if strings.Contains(value, "://") {
+		parsed, err := url.Parse(value)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			return fmt.Errorf("repository URL must be a valid URL")
+		}
+		return nil
+	}
+	if scpLikeRepoURL.MatchString(value) {
+		return nil
+	}
+	return fmt.Errorf("repository URL must be an ssh or https URL")
+}
+
+func validateTargetRevision(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fmt.Errorf("target revision is required")
+	}
+	if strings.Contains(value, " ") {
+		return fmt.Errorf("target revision must not contain spaces")
+	}
+	return nil
 }
