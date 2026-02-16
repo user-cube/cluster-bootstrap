@@ -7,11 +7,18 @@ import (
 )
 
 // CheckKubectlAvailable verifies that kubectl is installed and accessible.
-func CheckKubectlAvailable() error {
-	cmd := exec.Command("kubectl", "version", "--client", "--short")
+// Returns nil if kubectl is available, but only logs a warning if not available
+// (unless strict mode is enabled).
+func CheckKubectlAvailable(strict bool) error {
+	// Use kubectl --version which is simpler and more reliable
+	cmd := exec.Command("kubectl", "version")
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("kubectl not found or not accessible: %w\n  hint: ensure kubectl is installed and in your PATH\n  tip: install from https://kubernetes.io/docs/tasks/tools/", err)
+		if strict {
+			return fmt.Errorf("kubectl not found or not accessible: %w\n  hint: ensure kubectl is installed and in your PATH\n  tip: install from https://kubernetes.io/docs/tasks/tools/", err)
+		}
+		// In non-strict mode, just warn but don't fail
+		return nil
 	}
 	return nil
 }
@@ -19,7 +26,11 @@ func CheckKubectlAvailable() error {
 // CheckKubectlClusterAccess verifies that kubectl can connect to the cluster.
 // This checks if the current context is valid and accessible.
 func CheckKubectlClusterAccess() error {
-	cmd := exec.Command("kubectl", "cluster-info")
+	path, err := exec.LookPath("kubectl")
+	if err != nil {
+		return fmt.Errorf("kubectl not found in PATH: %w", err)
+	}
+	cmd := exec.Command(path, "cluster-info")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("cannot connect to cluster: %w\n  output: %s\n  hint: verify kubeconfig is set correctly and cluster is accessible", err, string(output))
@@ -29,10 +40,14 @@ func CheckKubectlClusterAccess() error {
 
 // CheckHelm verifies that Helm is installed and accessible.
 func CheckHelm() error {
-	cmd := exec.Command("helm", "version", "--short")
-	err := cmd.Run()
+	path, err := exec.LookPath("helm")
 	if err != nil {
-		return fmt.Errorf("helm not found or not accessible: %w\n  hint: ensure helm is installed and in your PATH\n  tip: install from https://helm.sh/docs/intro/install/", err)
+		return fmt.Errorf("helm not found in PATH: %w\n  hint: ensure helm is installed and in your PATH\n  tip: install from https://helm.sh/docs/intro/install/", err)
+	}
+	cmd := exec.Command(path, "version", "--short")
+	err = cmd.Run()
+	if err != nil {
+		return fmt.Errorf("helm found at %s but failed to run: %w\n  hint: verify helm is properly configured", path, err)
 	}
 	return nil
 }
@@ -43,10 +58,14 @@ func CheckSOPS(encryptionBackend string) error {
 		return nil
 	}
 
-	cmd := exec.Command("sops", "--version")
-	err := cmd.Run()
+	path, err := exec.LookPath("sops")
 	if err != nil {
-		return fmt.Errorf("sops not found or not accessible: %w\n  hint: ensure sops is installed and in your PATH\n  tip: install from https://github.com/mozilla/sops", err)
+		return fmt.Errorf("sops not found in PATH: %w\n  hint: ensure sops is installed and in your PATH\n  tip: install from https://github.com/mozilla/sops", err)
+	}
+	cmd := exec.Command(path, "--version")
+	err = cmd.Run()
+	if err != nil {
+		return fmt.Errorf("sops found at %s but failed to run: %w", path, err)
 	}
 	return nil
 }
@@ -58,10 +77,15 @@ func CheckAge(encryptionBackend string, ageKeyFile string) error {
 	}
 
 	// Check if age-keygen is available
-	cmd := exec.Command("age-keygen", "--version")
-	err := cmd.Run()
+	path, err := exec.LookPath("age-keygen")
 	if err != nil {
-		return fmt.Errorf("age not found or not accessible: %w\n  hint: ensure age is installed and in your PATH\n  tip: install from https://github.com/FiloSottile/age", err)
+		return fmt.Errorf("age not found in PATH: %w\n  hint: ensure age is installed and in your PATH\n  tip: install from https://github.com/FiloSottile/age", err)
+	}
+
+	cmd := exec.Command(path, "--version")
+	err = cmd.Run()
+	if err != nil {
+		return fmt.Errorf("age found at %s but failed to run: %w", path, err)
 	}
 
 	// Check if the age key file is readable
@@ -78,10 +102,15 @@ func CheckGitCrypt(encryptionBackend string) error {
 		return nil
 	}
 
-	cmd := exec.Command("git-crypt", "--version")
-	err := cmd.Run()
+	path, err := exec.LookPath("git-crypt")
 	if err != nil {
-		return fmt.Errorf("git-crypt not found or not accessible: %w\n  hint: ensure git-crypt is installed and in your PATH\n  tip: install from https://github.com/AGWA/git-crypt", err)
+		return fmt.Errorf("git-crypt not found in PATH: %w\n  hint: ensure git-crypt is installed and in your PATH\n  tip: install from https://github.com/AGWA/git-crypt", err)
+	}
+
+	cmd := exec.Command(path, "--version")
+	err = cmd.Run()
+	if err != nil {
+		return fmt.Errorf("git-crypt found at %s but failed to run: %w", path, err)
 	}
 	return nil
 }
@@ -119,7 +148,8 @@ func CheckSSHKey(keyPath string) error {
 }
 
 // PreflightChecks performs all prerequisite checks before bootstrap.
-func PreflightChecks(encryption, ageKeyFile string, verbose bool) error {
+// strict mode is enabled when --wait-for-health is true, requiring kubectl cluster access.
+func PreflightChecks(encryption, ageKeyFile string, verbose bool, requireKubectl bool) error {
 	logger := NewLogger(verbose)
 	checksStage := logger.Stage("Prerequisite Checks")
 
@@ -127,8 +157,16 @@ func PreflightChecks(encryption, ageKeyFile string, verbose bool) error {
 		name string
 		fn   func() error
 	}{
-		{"kubectl available", CheckKubectlAvailable},
-		{"kubectl cluster access", CheckKubectlClusterAccess},
+		{"kubectl available", func() error {
+			return CheckKubectlAvailable(requireKubectl)
+		}},
+		{"kubectl cluster access", func() error {
+			// Only check cluster access if required (e.g., when using --wait-for-health)
+			if !requireKubectl {
+				return nil
+			}
+			return CheckKubectlClusterAccess()
+		}},
 		{"helm available", CheckHelm},
 		{"sops/age for encryption", func() error {
 			if err := CheckSOPS(encryption); err != nil {

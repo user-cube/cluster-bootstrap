@@ -28,6 +28,8 @@ var (
 	encryption        string
 	gitcryptKeyFile   string
 	appPath           string
+	waitForHealth     bool
+	healthTimeout     int
 )
 
 var bootstrapCmd = &cobra.Command{
@@ -52,6 +54,8 @@ func init() {
 	bootstrapCmd.Flags().StringVar(&encryption, "encryption", "sops", "encryption backend (sops|git-crypt)")
 	bootstrapCmd.Flags().StringVar(&gitcryptKeyFile, "gitcrypt-key-file", "", "path to git-crypt symmetric key file (creates K8s secret)")
 	bootstrapCmd.Flags().StringVar(&appPath, "app-path", "apps", "path inside the Git repo for the App of Apps source")
+	bootstrapCmd.Flags().BoolVar(&waitForHealth, "wait-for-health", false, "wait for cluster components to be ready after bootstrap")
+	bootstrapCmd.Flags().IntVar(&healthTimeout, "health-timeout", 180, "timeout in seconds for health checks (default 180)")
 
 	rootCmd.AddCommand(bootstrapCmd)
 }
@@ -61,7 +65,8 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	logger := NewLogger(verbose)
 
 	// Run preflight checks
-	if err := PreflightChecks(encryption, bootstrapAgeKey, verbose); err != nil {
+	// Only require kubectl if we're going to use wait-for-health
+	if err := PreflightChecks(encryption, bootstrapAgeKey, verbose, waitForHealth); err != nil {
 		return err
 	}
 
@@ -205,6 +210,22 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	appStage.Detail("✓ App of Apps created successfully")
 	appStage.Detail("ArgoCD will automatically sync enabled components")
 	appStage.Done()
+
+	// Wait for health checks if requested
+	if waitForHealth {
+		fmt.Println()
+		stepf("Waiting for cluster components to be ready...")
+		healthStatus, err := WaitForHealth(ctx, kubeconfig, kubeContext, env, healthTimeout)
+		if err != nil {
+			warnf("Health check failed: %v", err)
+			// Don't fail bootstrap if health checks don't complete, just warn
+		} else {
+			PrintHealthStatus(healthStatus)
+			if !healthStatus.Healthy {
+				warnf("Some components are not ready yet. Bootstrap completed, but you may want to wait a bit longer for everything to be ready.")
+			}
+		}
+	}
 
 	// Print access instructions
 	fmt.Println()

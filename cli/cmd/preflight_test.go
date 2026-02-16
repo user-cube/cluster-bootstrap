@@ -10,7 +10,12 @@ import (
 
 // TestCheckKubectlAvailable tests kubectl availability check.
 func TestCheckKubectlAvailable(t *testing.T) {
-	err := CheckKubectlAvailable()
+	// Test with strict=false - should not fail if kubectl not available
+	err := CheckKubectlAvailable(false)
+	require.NoError(t, err, "kubectl check should pass in non-strict mode")
+
+	// Test with strict=true - will fail if kubectl not available
+	err = CheckKubectlAvailable(true)
 	// This will only pass if kubectl is installed
 	if err != nil {
 		t.Logf("kubectl not available (expected in some environments): %v", err)

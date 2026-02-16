@@ -17,6 +17,7 @@ var (
 	stepColor    = color.New(color.FgCyan, color.Bold).SprintFunc()
 	successColor = color.New(color.FgGreen, color.Bold).SprintFunc()
 	errorColor   = color.New(color.FgRed, color.Bold).SprintFunc()
+	warningColor = color.New(color.FgYellow, color.Bold).SprintFunc()
 )
 
 var rootCmd = &cobra.Command{
@@ -62,6 +63,14 @@ func stepf(format string, args ...interface{}) {
 
 func successf(format string, args ...interface{}) {
 	fmt.Printf("%s %s\n", successColor("==>"), fmt.Sprintf(format, args...))
+}
+
+func warnf(format string, args ...interface{}) {
+	fmt.Printf("%s %s\n", warningColor("⚠ "), fmt.Sprintf(format, args...))
+}
+
+func errorf(format string, args ...interface{}) {
+	fmt.Printf("%s %s\n", errorColor("✗"), fmt.Sprintf(format, args...))
 }
 
 func init() {
