@@ -4,7 +4,7 @@ project_name: cluster-bootstrap
 
 before:
   hooks:
-    - cd cli && go mod tidy
+    - sh -c 'cd cli && go mod tidy'
 
 builds:
   - main: ./main.go
