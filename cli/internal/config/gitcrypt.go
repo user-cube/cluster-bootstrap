@@ -37,15 +37,15 @@ func EnsureGitCryptAttributes(outputDir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open %s: %w", path, err)
 	}
-	defer f.Close()
 
 	if len(content) == 0 {
 		suffix = ""
 	}
 
 	if _, err := fmt.Fprintf(f, "%s%s\n", suffix, GitCryptAttributesPattern); err != nil {
+		_ = f.Close()
 		return fmt.Errorf("failed to write %s: %w", path, err)
 	}
 
-	return nil
+	return f.Close()
 }
