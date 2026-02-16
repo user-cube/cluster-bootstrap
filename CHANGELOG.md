@@ -1,3 +1,13 @@
+## [1.1.5](https://github.com/user-cube/cluster-bootstrap/compare/v1.1.4...v1.1.5) (2026-02-16)
+
+
+### Bug Fixes
+
+* add badge ([1b68639](https://github.com/user-cube/cluster-bootstrap/commit/1b686391a59711b52119060ead99c45665ca20ce))
+* fix cicd ([5a0104d](https://github.com/user-cube/cluster-bootstrap/commit/5a0104d41a949a6517d5955e35710cd6780283ca))
+* fix cicd ([8a39a75](https://github.com/user-cube/cluster-bootstrap/commit/8a39a75fc4b80f4f9883b25399cb28896815b386))
+* update release method ([#21](https://github.com/user-cube/cluster-bootstrap/issues/21)) ([926e552](https://github.com/user-cube/cluster-bootstrap/commit/926e552c8880341ddbd38ee02682f80cc6d14fe7))
+
 ## [1.1.6](https://github.com/user-cube/cluster-bootstrap/compare/v1.1.5...v1.1.6) (2026-02-16)
 
 
