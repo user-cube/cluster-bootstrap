@@ -1,5 +1,8 @@
 # Cluster Bootstrap
 
+[![CI](https://github.com/user-cube/cluster-bootstrap/actions/workflows/ci.yml/badge.svg)](https://github.com/user-cube/cluster-bootstrap/actions/workflows/ci.yml)
+[![Release](https://github.com/user-cube/cluster-bootstrap/actions/workflows/release.yml/badge.svg)](https://github.com/user-cube/cluster-bootstrap/actions/workflows/release.yml)
+
 GitOps repo for bootstrapping Kubernetes clusters with ArgoCD using the **App of Apps** pattern.
 
 ## Documentation
