@@ -74,3 +74,43 @@ func (c *Client) CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey
 	}
 	return secret, nil
 }
+
+// CreateGitCryptKeySecret creates or updates the git-crypt-key secret in the argocd namespace.
+// The key data is the raw symmetric key used by git-crypt.
+func (c *Client) CreateGitCryptKeySecret(ctx context.Context, keyData []byte) error {
+	if err := c.EnsureNamespace(ctx, "argocd"); err != nil {
+		return err
+	}
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "git-crypt-key",
+			Namespace: "argocd",
+			Annotations: map[string]string{
+				"cluster-bootstrap/origin":     "gitcrypt-key",
+				"cluster-bootstrap/managed-by": "cluster-bootstrap",
+			},
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"git-crypt-key": keyData,
+		},
+	}
+
+	existing, err := c.Clientset.CoreV1().Secrets("argocd").Get(ctx, "git-crypt-key", metav1.GetOptions{})
+	if err != nil {
+		_, err = c.Clientset.CoreV1().Secrets("argocd").Create(ctx, secret, metav1.CreateOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to create git-crypt-key secret: %w", err)
+		}
+		return nil
+	}
+
+	existing.Annotations = secret.Annotations
+	existing.Data = secret.Data
+	_, err = c.Clientset.CoreV1().Secrets("argocd").Update(ctx, existing, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update git-crypt-key secret: %w", err)
+	}
+	return nil
+}

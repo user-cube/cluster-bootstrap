@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -21,12 +22,15 @@ var (
 	kubeconfig        string
 	kubeContext       string
 	bootstrapAgeKey   string
+	encryption        string
+	gitcryptKeyFile   string
+	appPath           string
 )
 
 var bootstrapCmd = &cobra.Command{
 	Use:   "bootstrap <environment>",
 	Short: "Bootstrap a Kubernetes cluster with ArgoCD and secrets",
-	Long: `Decrypts the SOPS-encrypted secrets file, installs ArgoCD,
+	Long: `Decrypts the secrets file, installs ArgoCD,
 creates Kubernetes secrets, and applies the App of Apps root Application.
 
 Replaces the manual install.sh process.`,
@@ -35,12 +39,15 @@ Replaces the manual install.sh process.`,
 }
 
 func init() {
-	bootstrapCmd.Flags().StringVar(&secretsFile, "secrets-file", "", "path to SOPS-encrypted secrets file (default: secrets.<env>.enc.yaml)")
+	bootstrapCmd.Flags().StringVar(&secretsFile, "secrets-file", "", "path to secrets file (default: secrets.<env>.enc.yaml or secrets.<env>.yaml)")
 	bootstrapCmd.Flags().BoolVar(&dryRun, "dry-run", false, "print manifests without applying")
 	bootstrapCmd.Flags().BoolVar(&skipArgoCDInstall, "skip-argocd-install", false, "skip ArgoCD installation")
 	bootstrapCmd.Flags().StringVar(&kubeconfig, "kubeconfig", "", "path to kubeconfig file")
 	bootstrapCmd.Flags().StringVar(&kubeContext, "context", "", "kubeconfig context to use")
 	bootstrapCmd.Flags().StringVar(&bootstrapAgeKey, "age-key-file", "", "path to age private key file for SOPS decryption")
+	bootstrapCmd.Flags().StringVar(&encryption, "encryption", "sops", "encryption backend (sops|git-crypt)")
+	bootstrapCmd.Flags().StringVar(&gitcryptKeyFile, "gitcrypt-key-file", "", "path to git-crypt symmetric key file (creates K8s secret)")
+	bootstrapCmd.Flags().StringVar(&appPath, "app-path", "apps", "path inside the Git repo for the App of Apps source")
 
 	rootCmd.AddCommand(bootstrapCmd)
 }
@@ -50,16 +57,34 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("==> Bootstrapping cluster for environment: %s\n", env)
 
-	// Step 2: Decrypt secrets
-	sf := secretsFile
-	if sf == "" {
-		sf = config.SecretsFileName(env)
-	}
-	fmt.Printf("==> Decrypting secrets from %s...\n", sf)
-	sopsOpts := &sops.Options{AgeKeyFile: bootstrapAgeKey}
-	envSecrets, err := config.LoadSecrets(sf, sopsOpts)
-	if err != nil {
-		return err
+	// Load secrets based on encryption backend
+	var envSecrets *config.EnvironmentSecrets
+	var err error
+
+	switch encryption {
+	case "git-crypt":
+		sf := secretsFile
+		if sf == "" {
+			sf = filepath.Join(baseDir, config.SecretsFileNamePlain(env))
+		}
+		fmt.Printf("==> Loading plaintext secrets from %s...\n", sf)
+		envSecrets, err = config.LoadSecretsPlaintext(sf)
+		if err != nil {
+			return err
+		}
+	case "sops":
+		sf := secretsFile
+		if sf == "" {
+			sf = filepath.Join(baseDir, config.SecretsFileName(env))
+		}
+		fmt.Printf("==> Decrypting secrets from %s...\n", sf)
+		sopsOpts := &sops.Options{AgeKeyFile: bootstrapAgeKey}
+		envSecrets, err = config.LoadSecrets(sf, sopsOpts)
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unsupported encryption backend: %s (use sops or git-crypt)", encryption)
 	}
 
 	if verbose {
@@ -68,10 +93,10 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	}
 
 	if dryRun {
-		return printDryRun(envSecrets, env)
+		return printDryRun(envSecrets, env, appPath)
 	}
 
-	// Step 3: Create k8s client
+	// Create k8s client
 	client, err := k8s.NewClient(kubeconfig, kubeContext)
 	if err != nil {
 		return fmt.Errorf("failed to create kubernetes client: %w", err)
@@ -79,7 +104,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
-	// Step 4: Create Kubernetes secrets (before Helm install, as the chart may reference them)
+	// Create Kubernetes secrets (before Helm install, as the chart may reference them)
 	fmt.Println("==> Creating Kubernetes secrets...")
 	if err := client.EnsureNamespace(ctx, "argocd"); err != nil {
 		return err
@@ -88,21 +113,33 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Step 5: Install ArgoCD via Helm
+	// If git-crypt key file provided, store it as a K8s secret
+	if gitcryptKeyFile != "" {
+		keyData, err := os.ReadFile(gitcryptKeyFile)
+		if err != nil {
+			return fmt.Errorf("failed to read git-crypt key file: %w", err)
+		}
+		fmt.Println("==> Creating git-crypt-key secret...")
+		if err := client.CreateGitCryptKeySecret(ctx, keyData); err != nil {
+			return err
+		}
+	}
+
+	// Install ArgoCD via Helm
 	if !skipArgoCDInstall {
 		fmt.Println("==> Installing ArgoCD via Helm...")
-		if err := helm.InstallArgoCD(ctx, kubeconfig, kubeContext, env, verbose); err != nil {
+		if err := helm.InstallArgoCD(ctx, kubeconfig, kubeContext, env, baseDir, verbose); err != nil {
 			return fmt.Errorf("failed to install ArgoCD: %w", err)
 		}
 	}
 
-	// Step 6: Apply App of Apps
+	// Apply App of Apps
 	fmt.Printf("==> Applying App of Apps for environment: %s\n", env)
-	if _, err := client.ApplyAppOfApps(ctx, envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, env, false); err != nil {
+	if _, err := client.ApplyAppOfApps(ctx, envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, env, appPath, false); err != nil {
 		return err
 	}
 
-	// Step 7: Print access instructions
+	// Print access instructions
 	fmt.Println("\n==> Done! ArgoCD is installed and the app-of-apps root Application has been created.")
 	fmt.Println("    Access the ArgoCD UI:")
 	fmt.Println("      kubectl port-forward svc/argocd-server -n argocd 8080:443")
@@ -112,7 +149,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func printDryRun(envSecrets *config.EnvironmentSecrets, env string) error {
+func printDryRun(envSecrets *config.EnvironmentSecrets, env, appPath string) error {
 	fmt.Println("\n--- DRY RUN: Kubernetes Secrets ---")
 
 	// Repo SSH secret
@@ -155,7 +192,7 @@ func printDryRun(envSecrets *config.EnvironmentSecrets, env string) error {
 			"source": map[string]interface{}{
 				"repoURL":        envSecrets.Repo.URL,
 				"targetRevision": envSecrets.Repo.TargetRevision,
-				"path":           "apps",
+				"path":           appPath,
 				"helm": map[string]interface{}{
 					"valueFiles": []string{
 						fmt.Sprintf("values/%s.yaml", env),

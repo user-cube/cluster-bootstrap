@@ -7,7 +7,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var verbose bool
+var (
+	verbose bool
+	baseDir string
+)
 
 var rootCmd = &cobra.Command{
 	Use:   "cluster-bootstrap",
@@ -26,4 +29,5 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
+	rootCmd.PersistentFlags().StringVar(&baseDir, "base-dir", ".", "base directory for repo content")
 }
