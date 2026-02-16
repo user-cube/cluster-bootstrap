@@ -59,17 +59,35 @@ func runInit(cmd *cobra.Command, args []string) error {
 	} else {
 		for {
 			var env string
-			err := huh.NewInput().
-				Title("Environment name (leave empty to finish)").
-				Value(&env).
-				Run()
+			err := huh.NewForm(
+				huh.NewGroup(
+					huh.NewInput().
+						Title("Environment name").
+						Description("Name for this environment (e.g. dev, staging, prod)").
+						Validate(requiredValidator("environment name is required")).
+						Value(&env),
+				),
+			).Run()
 			if err != nil {
 				return fmt.Errorf("prompt failed: %w", err)
 			}
-			if env == "" {
+			environments = append(environments, env)
+			fmt.Printf("  Added environment: %s\n", env)
+
+			var addMore bool
+			err = huh.NewForm(
+				huh.NewGroup(
+					huh.NewConfirm().
+						Title("Add another environment?").
+						Value(&addMore),
+				),
+			).Run()
+			if err != nil {
+				return fmt.Errorf("prompt failed: %w", err)
+			}
+			if !addMore {
 				break
 			}
-			environments = append(environments, env)
 		}
 	}
 

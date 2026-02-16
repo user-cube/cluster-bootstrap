@@ -9,7 +9,7 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: detect-private-key
-        exclude: "secrets\\..*\\.enc\\.yaml$"
+        exclude: "(secrets\\..*\\.enc\\.yaml$|docs/guides/secrets-management\\.md$)"
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.22.1

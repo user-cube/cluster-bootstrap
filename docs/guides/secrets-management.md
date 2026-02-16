@@ -1,6 +1,6 @@
 # Secrets Management
 
-This repo uses a multi-layer secrets architecture: SOPS for encryption at rest, Vault for runtime secrets storage, and External Secrets Operator for syncing secrets into Kubernetes.
+This repo uses a multi-layer secrets architecture with two supported encryption backends for secrets at rest: **SOPS** (default) and **git-crypt**. At runtime, Vault provides secrets storage and External Secrets Operator syncs secrets into Kubernetes.
 
 ## Overview
 
@@ -8,7 +8,11 @@ This repo uses a multi-layer secrets architecture: SOPS for encryption at rest, 
 ┌─────────────────────────────────────────────────────────┐
 │                    Developer Machine                      │
 │                                                           │
+│  Option A: SOPS                                           │
 │  secrets.dev.enc.yaml ──(SOPS + age)──> plaintext YAML   │
+│                                                           │
+│  Option B: git-crypt                                      │
+│  secrets.dev.yaml ──(git-crypt unlock)──> plaintext YAML  │
 │                                                           │
 │  CLI bootstrap reads decrypted secrets and:               │
 │    1. Creates repo-ssh-key Secret in argocd namespace     │
@@ -84,6 +88,74 @@ The `init` command sets up SOPS and creates encrypted secrets interactively:
 ```
 
 This supports age, AWS KMS, and GCP KMS as encryption providers.
+
+## git-crypt Encryption
+
+[git-crypt](https://github.com/AGWA/git-crypt) provides transparent file encryption in Git repositories. Files are encrypted on commit and decrypted on checkout — no separate decrypt step is needed during development.
+
+### Setup
+
+```bash
+# Initialize git-crypt in the repo (one-time)
+git-crypt init
+
+# Run the CLI init with git-crypt provider
+./cli/cluster-bootstrap init --provider git-crypt
+```
+
+This will:
+
+1. Verify that `git-crypt init` has been run
+2. Add the encryption pattern to `.gitattributes`:
+   ```
+   secrets.*.yaml filter=git-crypt diff=git-crypt
+   ```
+3. Create plaintext `secrets.<env>.yaml` files (encrypted automatically on commit)
+
+### Secrets file structure
+
+git-crypt secrets files use the same structure as SOPS but without the `.enc` suffix:
+
+```yaml
+# secrets.dev.yaml (plaintext locally, encrypted in Git)
+repo:
+  url: git@github.com:user-cube/cluster-bootstrap.git
+  targetRevision: main
+  sshPrivateKey: |
+    -----BEGIN OPENSSH PRIVATE KEY-----
+    ...
+    -----END OPENSSH PRIVATE KEY-----
+```
+
+### Bootstrap with git-crypt
+
+```bash
+# Ensure the repo is unlocked
+git-crypt unlock
+
+# Bootstrap using git-crypt backend
+./cli/cluster-bootstrap bootstrap dev --encryption git-crypt
+```
+
+If ArgoCD needs to decrypt the repo, store the symmetric key as a K8s secret:
+
+```bash
+# Export the git-crypt key
+git-crypt export-key /tmp/git-crypt-key
+
+# Store it in the cluster
+./cli/cluster-bootstrap gitcrypt-key --key-file /tmp/git-crypt-key
+```
+
+### SOPS vs git-crypt
+
+| | SOPS | git-crypt |
+|---|------|-----------|
+| Encryption granularity | Per-value (only values are encrypted) | Per-file (entire file is encrypted) |
+| Key management | age, AWS KMS, GCP KMS | Symmetric key + GPG |
+| Git diff | Partial (metadata visible) | Binary diff when locked |
+| Setup complexity | Requires `.sops.yaml` config | Requires `git-crypt init` + GPG/key sharing |
+| Best for | CI/CD pipelines, multi-cloud | Simple setups, small teams |
 
 ## Vault Integration
 
