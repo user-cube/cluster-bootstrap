@@ -1,0 +1,62 @@
+environment: dev
+
+repo:
+  url: git@github.com:user-cube/cluster-bootstrap.git
+  targetRevision: main
+
+components:
+  argocd:
+    enabled: true
+    namespace: argocd
+    syncWave: "0"
+
+  vault:
+    enabled: true
+    namespace: vault
+    syncWave: "1"
+
+  external-secrets:
+    enabled: true
+    namespace: external-secrets
+    syncWave: "1"
+
+  argocd-repo-secret:
+    enabled: true
+    namespace: argocd
+    syncWave: "2"
+    createNamespace: false
+
+  prometheus-operator-crds:
+    enabled: true
+    namespace: monitoring
+    syncWave: "2"
+    hasValues: false
+    syncOptions:
+      - ServerSideApply=true
+      - Replace=true
+
+  reloader:
+    enabled: true
+    namespace: reloader
+    syncWave: "2"
+
+  kube-prometheus-stack:
+    enabled: true
+    namespace: monitoring
+    syncWave: "3"
+    ignoreDifferences:
+      - group: monitoring.coreos.com
+        kind: Prometheus
+        jsonPointers:
+          - /status
+      - group: monitoring.coreos.com
+        kind: Alertmanager
+        jsonPointers:
+          - /status
+    syncOptions:
+      - RespectIgnoreDifferences=true
+
+  trivy-operator:
+    enabled: true
+    namespace: trivy-system
+    syncWave: "3"
