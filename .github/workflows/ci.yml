@@ -53,6 +53,47 @@ jobs:
         with:
           working-directory: cli
 
+  security:
+    if: github.repository == 'user-cube/cluster-bootstrap'
+    name: Security Scan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+
+      - name: Run gosec
+        uses: securego/gosec@master
+        with:
+          args: ./...
+          working-directory: cli
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: cli
+          exit-code: 1
+          severity: HIGH,CRITICAL
+
+  gitleaks:
+    name: Secret Detection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   helm-lint:
     name: Helm Lint
     runs-on: ubuntu-latest
