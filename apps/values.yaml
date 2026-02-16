@@ -9,6 +9,8 @@ components:
     enabled: true
     namespace: argocd
     syncWave: "0"
+    syncOptions:
+      - ServerSideApply=true
 
   vault:
     enabled: true
