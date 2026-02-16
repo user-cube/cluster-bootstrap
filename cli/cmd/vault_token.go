@@ -80,14 +80,14 @@ func runVaultToken(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to create vault-root-token secret: %w", err)
 		}
-		fmt.Println("Created secret vault/vault-root-token")
+		successf("Created secret vault/vault-root-token")
 	} else {
 		existing.StringData = secret.StringData
 		_, err = client.Clientset.CoreV1().Secrets("vault").Update(ctx, existing, metav1.UpdateOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to update vault-root-token secret: %w", err)
 		}
-		fmt.Println("Updated secret vault/vault-root-token")
+		successf("Updated secret vault/vault-root-token")
 	}
 
 	return nil

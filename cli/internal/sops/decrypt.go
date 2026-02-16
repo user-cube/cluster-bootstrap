@@ -63,6 +63,12 @@ func Decrypt(filePath string, opts *Options) ([]byte, error) {
 
 // Encrypt encrypts a plaintext YAML file using the .sops.yaml config and returns ciphertext bytes.
 func Encrypt(filePath string, opts *Options) ([]byte, error) {
+	return EncryptWithTarget(filePath, filePath, opts)
+}
+
+// EncryptWithTarget encrypts a plaintext file using config rules for targetPath.
+// This allows creation_rules to match the final output filename.
+func EncryptWithTarget(filePath, targetPath string, opts *Options) ([]byte, error) {
 	restore := setAgeEnv(opts)
 	defer restore()
 
@@ -72,13 +78,13 @@ func Encrypt(filePath string, opts *Options) ([]byte, error) {
 		return nil, fmt.Errorf("sops encrypt: failed to read file: %w", err)
 	}
 
-	encConfig, err := loadEncryptionConfig(filePath)
+	encConfig, err := loadEncryptionConfig(targetPath)
 	if err != nil {
 		return nil, err
 	}
 
 	// Parse plaintext into sops tree branches
-	store := common.DefaultStoreForPath(sopsconfig.NewStoresConfig(), filePath)
+	store := common.DefaultStoreForPath(sopsconfig.NewStoresConfig(), targetPath)
 	branches, err := store.LoadPlainFile(data)
 	if err != nil {
 		return nil, fmt.Errorf("sops encrypt: failed to parse plaintext: %w", err)
@@ -87,7 +93,7 @@ func Encrypt(filePath string, opts *Options) ([]byte, error) {
 		return nil, fmt.Errorf("sops encrypt: file cannot be empty")
 	}
 
-	absPath, err := filepath.Abs(filePath)
+	absPath, err := filepath.Abs(targetPath)
 	if err != nil {
 		return nil, fmt.Errorf("sops encrypt: failed to resolve path: %w", err)
 	}

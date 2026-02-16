@@ -176,28 +176,36 @@ func fetchChart(settings *cli.EnvSettings, chartName, chartVersion, repoURL stri
 		return "", fmt.Errorf("failed to create chart repository: %w", err)
 	}
 
-	// Download the repo index
-	_, err = chartRepo.DownloadIndexFile()
-	if err != nil {
-		return "", fmt.Errorf("failed to download repo index: %w", err)
+	const maxAttempts = 3
+	var chartPath string
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		// Download the repo index
+		_, err = chartRepo.DownloadIndexFile()
+		if err != nil {
+			lastErr = fmt.Errorf("failed to download repo index: %w", err)
+		} else {
+			// Locate/download the chart
+			chartPathOpts := action.ChartPathOptions{
+				RepoURL: repoURL,
+				Version: chartVersion,
+			}
+			chartPath, err = chartPathOpts.LocateChart(chartName, settings)
+			if err == nil {
+				if verbose {
+					fmt.Printf("  Downloaded chart %s-%s to %s\n", chartName, chartVersion, chartPath)
+				}
+				return chartPath, nil
+			}
+			lastErr = fmt.Errorf("failed to locate chart: %w", err)
+		}
+
+		if attempt < maxAttempts {
+			time.Sleep(time.Duration(attempt) * time.Second)
+		}
 	}
 
-	// Locate/download the chart
-	chartPathOpts := action.ChartPathOptions{
-		RepoURL: repoURL,
-		Version: chartVersion,
-	}
-
-	chartPath, err := chartPathOpts.LocateChart(chartName, settings)
-	if err != nil {
-		return "", fmt.Errorf("failed to locate chart: %w", err)
-	}
-
-	if verbose {
-		fmt.Printf("  Downloaded chart %s-%s to %s\n", chartName, chartVersion, chartPath)
-	}
-
-	return chartPath, nil
+	return "", fmt.Errorf("failed to fetch chart from %s after %d attempts: %w", repoURL, maxAttempts, lastErr)
 }
 
 // loadValues reads base.yaml and the environment-specific values file, then merges them.

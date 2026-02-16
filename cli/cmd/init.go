@@ -167,7 +167,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to write temp file: %w", err)
 		}
 
-		encrypted, err := sops.Encrypt(tmpFile, nil)
+		encrypted, err := sops.EncryptWithTarget(tmpFile, outputFile, nil)
 		_ = os.Remove(tmpFile)
 		if err != nil {
 			return fmt.Errorf("failed to encrypt secrets for %s: %w", env, err)

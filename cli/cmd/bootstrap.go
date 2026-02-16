@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -55,7 +56,10 @@ func init() {
 func runBootstrap(cmd *cobra.Command, args []string) error {
 	env := args[0]
 
-	fmt.Printf("==> Bootstrapping cluster for environment: %s\n", env)
+	stepf("Bootstrapping cluster for environment: %s", env)
+	if err := validateBootstrapInputs(env); err != nil {
+		return err
+	}
 	if verbose {
 		fmt.Printf("  Base dir: %s\n", baseDir)
 		fmt.Printf("  App path: %s\n", appPath)
@@ -90,7 +94,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 			sf = filepath.Join(baseDir, config.SecretsFileNamePlain(env))
 		}
 		secretsPath = sf
-		fmt.Printf("==> Loading plaintext secrets from %s...\n", sf)
+		stepf("Loading plaintext secrets from %s...", sf)
 		envSecrets, err = config.LoadSecretsPlaintext(sf)
 		if err != nil {
 			return err
@@ -101,7 +105,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 			sf = filepath.Join(baseDir, config.SecretsFileName(env))
 		}
 		secretsPath = sf
-		fmt.Printf("==> Decrypting secrets from %s...\n", sf)
+		stepf("Decrypting secrets from %s...", sf)
 		sopsOpts := &sops.Options{AgeKeyFile: bootstrapAgeKey}
 		envSecrets, err = config.LoadSecrets(sf, sopsOpts)
 		if err != nil {
@@ -133,7 +137,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
 	// Create Kubernetes secrets (before Helm install, as the chart may reference them)
-	fmt.Println("==> Creating Kubernetes secrets...")
+	stepf("Creating Kubernetes secrets...")
 	if err := client.EnsureNamespace(ctx, "argocd"); err != nil {
 		return err
 	}
@@ -147,7 +151,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read git-crypt key file: %w", err)
 		}
-		fmt.Println("==> Creating git-crypt-key secret...")
+		stepf("Creating git-crypt-key secret...")
 		if err := client.CreateGitCryptKeySecret(ctx, keyData); err != nil {
 			return err
 		}
@@ -155,20 +159,21 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 
 	// Install ArgoCD via Helm
 	if !skipArgoCDInstall {
-		fmt.Println("==> Installing ArgoCD via Helm...")
+		stepf("Installing ArgoCD via Helm...")
 		if err := helm.InstallArgoCD(ctx, kubeconfig, kubeContext, env, baseDir, verbose); err != nil {
 			return fmt.Errorf("failed to install ArgoCD: %w", err)
 		}
 	}
 
 	// Apply App of Apps
-	fmt.Printf("==> Applying App of Apps for environment: %s\n", env)
+	stepf("Applying App of Apps for environment: %s", env)
 	if _, err := client.ApplyAppOfApps(ctx, envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, env, appPath, false); err != nil {
 		return err
 	}
 
 	// Print access instructions
-	fmt.Println("\n==> Done! ArgoCD is installed and the app-of-apps root Application has been created.")
+	fmt.Println()
+	successf("Done! ArgoCD is installed and the app-of-apps root Application has been created.")
 	fmt.Println("    Access the ArgoCD UI:")
 	fmt.Println("      kubectl port-forward svc/argocd-server -n argocd 8080:443")
 	fmt.Println("    Get the initial admin password:")
@@ -180,7 +185,18 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 func printDryRun(envSecrets *config.EnvironmentSecrets, env, appPath string) error {
 	fmt.Println("\n--- DRY RUN: Kubernetes Secrets ---")
 
-	// Repo SSH secret
+	repoSecret, appOfApps := buildDryRunObjects(envSecrets, env, appPath)
+	printYAMLish(repoSecret)
+
+	// App of Apps
+	fmt.Println("---")
+	fmt.Println("\n--- DRY RUN: App of Apps Application ---")
+	printYAMLish(appOfApps)
+
+	return nil
+}
+
+func buildDryRunObjects(envSecrets *config.EnvironmentSecrets, env, appPath string) (map[string]interface{}, map[string]interface{}) {
 	repoSecret := map[string]interface{}{
 		"apiVersion": "v1",
 		"kind":       "Secret",
@@ -203,11 +219,7 @@ func printDryRun(envSecrets *config.EnvironmentSecrets, env, appPath string) err
 			"sshPrivateKey": envSecrets.Repo.SSHPrivateKey,
 		},
 	}
-	printYAMLish(repoSecret)
 
-	// App of Apps
-	fmt.Println("---")
-	fmt.Println("\n--- DRY RUN: App of Apps Application ---")
 	appOfApps := map[string]interface{}{
 		"apiVersion": "argoproj.io/v1alpha1",
 		"kind":       "Application",
@@ -239,7 +251,45 @@ func printDryRun(envSecrets *config.EnvironmentSecrets, env, appPath string) err
 			},
 		},
 	}
-	printYAMLish(appOfApps)
+
+	return repoSecret, appOfApps
+}
+
+func validateBootstrapInputs(env string) error {
+	if env == "" {
+		return fmt.Errorf("environment is required")
+	}
+
+	baseInfo, err := os.Stat(baseDir)
+	if err != nil {
+		return fmt.Errorf("base-dir %s is not accessible: %w", baseDir, err)
+	}
+	if !baseInfo.IsDir() {
+		return fmt.Errorf("base-dir %s is not a directory", baseDir)
+	}
+
+	if filepath.IsAbs(appPath) {
+		return fmt.Errorf("app-path must be relative to base-dir")
+	}
+	appFullPath := filepath.Join(baseDir, appPath)
+	if _, err := os.Stat(appFullPath); err != nil {
+		return fmt.Errorf("app-path %s does not exist under base-dir: %w", appPath, err)
+	}
+
+	if secretsFile != "" {
+		isEnc := strings.HasSuffix(secretsFile, ".enc.yaml")
+		isYaml := strings.HasSuffix(secretsFile, ".yaml")
+		switch encryption {
+		case "sops":
+			if !isEnc {
+				return fmt.Errorf("secrets-file must end with .enc.yaml when encryption is sops")
+			}
+		case "git-crypt":
+			if !isYaml || isEnc {
+				return fmt.Errorf("secrets-file must end with .yaml (not .enc.yaml) when encryption is git-crypt")
+			}
+		}
+	}
 
 	return nil
 }

@@ -4,12 +4,18 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
 var (
 	verbose bool
 	baseDir string
+)
+
+var (
+	stepColor    = color.New(color.FgCyan, color.Bold).SprintFunc()
+	successColor = color.New(color.FgGreen, color.Bold).SprintFunc()
 )
 
 var rootCmd = &cobra.Command{
@@ -25,6 +31,14 @@ func Execute() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func stepf(format string, args ...interface{}) {
+	fmt.Printf("%s %s\n", stepColor("==>"), fmt.Sprintf(format, args...))
+}
+
+func successf(format string, args ...interface{}) {
+	fmt.Printf("%s %s\n", successColor("==>"), fmt.Sprintf(format, args...))
 }
 
 func init() {
