@@ -13,7 +13,7 @@ import (
 const argoCDNamespace = "argocd"
 
 // ApplyAppOfApps creates the App of Apps root Application CR.
-func (c *Client) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env string, dryRun bool) (string, error) {
+func (c *Client) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, dryRun bool) (string, error) {
 	app := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "argoproj.io/v1alpha1",
@@ -27,7 +27,7 @@ func (c *Client) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, en
 				"source": map[string]interface{}{
 					"repoURL":        repoURL,
 					"targetRevision": targetRevision,
-					"path":           "apps",
+					"path":           appPath,
 					"helm": map[string]interface{}{
 						"valueFiles": []interface{}{
 							fmt.Sprintf("values/%s.yaml", env),

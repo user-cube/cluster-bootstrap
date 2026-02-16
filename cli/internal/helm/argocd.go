@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -24,7 +25,6 @@ import (
 const (
 	argoCDNamespace = "argocd"
 	argoCDRelease   = "argocd"
-	chartYAMLPath   = "components/argocd/Chart.yaml"
 )
 
 // chartDependency represents a single entry in Chart.yaml dependencies.
@@ -41,19 +41,20 @@ type chartFile struct {
 
 // loadChartConfig reads components/argocd/Chart.yaml and returns the first dependency's
 // chart name, version, and repository URL.
-func loadChartConfig() (name, version, repoURL string, err error) {
-	data, err := os.ReadFile(chartYAMLPath)
+func loadChartConfig(baseDir string) (name, version, repoURL string, err error) {
+	chartPath := filepath.Join(baseDir, "components/argocd/Chart.yaml")
+	data, err := os.ReadFile(chartPath)
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to read %s: %w", chartYAMLPath, err)
+		return "", "", "", fmt.Errorf("failed to read %s: %w", chartPath, err)
 	}
 
 	var cf chartFile
 	if err := yaml.Unmarshal(data, &cf); err != nil {
-		return "", "", "", fmt.Errorf("failed to parse %s: %w", chartYAMLPath, err)
+		return "", "", "", fmt.Errorf("failed to parse %s: %w", chartPath, err)
 	}
 
 	if len(cf.Dependencies) == 0 {
-		return "", "", "", fmt.Errorf("no dependencies found in %s", chartYAMLPath)
+		return "", "", "", fmt.Errorf("no dependencies found in %s", chartPath)
 	}
 
 	dep := cf.Dependencies[0]
@@ -63,7 +64,7 @@ func loadChartConfig() (name, version, repoURL string, err error) {
 // InstallArgoCD installs or upgrades ArgoCD using the Helm SDK.
 // It loads values from components/argocd/values/base.yaml and values/<env>.yaml,
 // then runs helm upgrade --install with --wait.
-func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env string, verbose bool) error {
+func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir string, verbose bool) error {
 	settings := cli.New()
 	settings.SetNamespace(argoCDNamespace)
 	if kubeconfig != "" {
@@ -85,7 +86,7 @@ func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env string, ver
 	}
 
 	// Read chart name, version and repo from components/argocd/Chart.yaml
-	chartName, chartVersion, repoURL, err := loadChartConfig()
+	chartName, chartVersion, repoURL, err := loadChartConfig(baseDir)
 	if err != nil {
 		return fmt.Errorf("failed to load chart config: %w", err)
 	}
@@ -103,7 +104,7 @@ func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env string, ver
 	}
 
 	// Load and merge values
-	vals, err := loadValues(env)
+	vals, err := loadValues(baseDir, env)
 	if err != nil {
 		return fmt.Errorf("failed to load values: %w", err)
 	}
@@ -191,9 +192,9 @@ func fetchChart(settings *cli.EnvSettings, chartName, chartVersion, repoURL stri
 }
 
 // loadValues reads base.yaml and the environment-specific values file, then merges them.
-func loadValues(env string) (map[string]interface{}, error) {
-	baseFile := "components/argocd/values/base.yaml"
-	envFile := fmt.Sprintf("components/argocd/values/%s.yaml", env)
+func loadValues(baseDir, env string) (map[string]interface{}, error) {
+	baseFile := filepath.Join(baseDir, "components/argocd/values/base.yaml")
+	envFile := filepath.Join(baseDir, fmt.Sprintf("components/argocd/values/%s.yaml", env))
 
 	baseVals, err := chartutil.ReadValuesFile(baseFile)
 	if err != nil {

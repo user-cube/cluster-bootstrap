@@ -24,24 +24,33 @@ var (
 var initCmd = &cobra.Command{
 	Use:   "init [environments...]",
 	Short: "Interactive setup to create .sops.yaml and per-environment secrets files",
-	Long: `Interactively configure SOPS encryption and create encrypted secrets files.
-Prompts for the SOPS provider, encryption key, and per-environment secrets.
-Each environment gets its own file: secrets.<env>.enc.yaml`,
+	Long: `Interactively configure encryption and create per-environment secrets files.
+Prompts for the encryption provider, encryption key, and per-environment secrets.
+
+Supported providers:
+  - age, aws-kms, gcp-kms: uses SOPS encryption (secrets.<env>.enc.yaml)
+  - git-crypt: uses git-crypt transparent encryption (secrets.<env>.yaml)`,
 	RunE: runInit,
 }
 
 func init() {
-	initCmd.Flags().StringVar(&provider, "provider", "", "SOPS provider (age|aws-kms|gcp-kms)")
+	initCmd.Flags().StringVar(&provider, "provider", "", "encryption provider (age|aws-kms|gcp-kms|git-crypt)")
 	initCmd.Flags().StringVar(&ageKeyFile, "age-key-file", "", "path to age public key file (for age provider)")
 	initCmd.Flags().StringVar(&kmsARN, "kms-arn", "", "AWS KMS key ARN (for aws-kms provider)")
 	initCmd.Flags().StringVar(&gcpKMSKey, "gcp-kms-key", "", "GCP KMS key resource ID (for gcp-kms provider)")
-	initCmd.Flags().StringVar(&outputDir, "output-dir", ".", "directory for encrypted secrets files")
+	initCmd.Flags().StringVar(&outputDir, "output-dir", ".", "directory for secrets files")
 
 	rootCmd.AddCommand(initCmd)
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	sopsConfigPath := filepath.Join(outputDir, ".sops.yaml")
+	// Use baseDir as fallback for outputDir when outputDir is default
+	effectiveOutputDir := outputDir
+	if outputDir == "." && baseDir != "." {
+		effectiveOutputDir = baseDir
+	}
+
+	sopsConfigPath := filepath.Join(effectiveOutputDir, ".sops.yaml")
 
 	// Determine environment names: from positional args or interactive prompt
 	var environments []string
@@ -50,17 +59,35 @@ func runInit(cmd *cobra.Command, args []string) error {
 	} else {
 		for {
 			var env string
-			err := huh.NewInput().
-				Title("Environment name (leave empty to finish)").
-				Value(&env).
-				Run()
+			err := huh.NewForm(
+				huh.NewGroup(
+					huh.NewInput().
+						Title("Environment name").
+						Description("Name for this environment (e.g. dev, staging, prod)").
+						Validate(requiredValidator("environment name is required")).
+						Value(&env),
+				),
+			).Run()
 			if err != nil {
 				return fmt.Errorf("prompt failed: %w", err)
 			}
-			if env == "" {
+			environments = append(environments, env)
+			fmt.Printf("  Added environment: %s\n", env)
+
+			var addMore bool
+			err = huh.NewForm(
+				huh.NewGroup(
+					huh.NewConfirm().
+						Title("Add another environment?").
+						Value(&addMore),
+				),
+			).Run()
+			if err != nil {
+				return fmt.Errorf("prompt failed: %w", err)
+			}
+			if !addMore {
 				break
 			}
-			environments = append(environments, env)
 		}
 	}
 
@@ -70,15 +97,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 	for _, env := range environments {
 		fmt.Printf("\n--- Environment: %s ---\n", env)
 
-		// Select SOPS provider for this environment
+		// Select encryption provider for this environment
 		envProvider := provider
 		if envProvider == "" {
 			err := huh.NewSelect[string]().
-				Title(fmt.Sprintf("Select SOPS provider for %s", env)).
+				Title(fmt.Sprintf("Select encryption provider for %s", env)).
 				Options(
 					huh.NewOption("age", "age"),
 					huh.NewOption("AWS KMS", "aws-kms"),
 					huh.NewOption("GCP KMS", "gcp-kms"),
+					huh.NewOption("git-crypt", "git-crypt"),
 				).
 				Value(&envProvider).
 				Run()
@@ -87,7 +115,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		// Get encryption key for this environment
+		if envProvider == "git-crypt" {
+			count, err := initGitCrypt(effectiveOutputDir, env)
+			if err != nil {
+				return err
+			}
+			created += count
+			continue
+		}
+
+		// SOPS path
 		key, err := getProviderKey(envProvider)
 		if err != nil {
 			return err
@@ -100,7 +137,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Updated %s with rule for %s\n", sopsConfigPath, env)
 
 		// Create encrypted secrets file
-		outputFile := filepath.Join(outputDir, config.SecretsFileName(env))
+		outputFile := filepath.Join(effectiveOutputDir, config.SecretsFileName(env))
 		if _, statErr := os.Stat(outputFile); statErr == nil {
 			var overwrite bool
 			err := huh.NewConfirm().
@@ -125,7 +162,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to marshal secrets: %w", err)
 		}
 
-		tmpFile := filepath.Join(outputDir, ".tmp.enc.yaml")
+		tmpFile := filepath.Join(effectiveOutputDir, ".tmp.enc.yaml")
 		if err := os.WriteFile(tmpFile, plaintextData, 0600); err != nil {
 			return fmt.Errorf("failed to write temp file: %w", err)
 		}
@@ -146,7 +183,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	if created == 0 {
 		// Check for pre-existing environment files before erroring
-		existing, _ := filepath.Glob(filepath.Join(outputDir, "secrets.*.enc.yaml"))
+		existing, _ := filepath.Glob(filepath.Join(effectiveOutputDir, "secrets.*.enc.yaml"))
+		existingPlain, _ := filepath.Glob(filepath.Join(effectiveOutputDir, "secrets.*.yaml"))
+		existing = append(existing, existingPlain...)
 		if len(existing) > 0 {
 			fmt.Println("\nExisting environment secrets files found:")
 			for _, f := range existing {
@@ -160,6 +199,54 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println("\nYou can now run: cluster-bootstrap bootstrap <environment>")
 
 	return nil
+}
+
+// initGitCrypt handles the git-crypt provider path for a single environment.
+func initGitCrypt(outputDir, env string) (int, error) {
+	// Verify git-crypt is initialised in the repo
+	gitCryptDir := filepath.Join(outputDir, ".git", "git-crypt")
+	if _, err := os.Stat(gitCryptDir); os.IsNotExist(err) {
+		return 0, fmt.Errorf("git-crypt not initialised: %s not found. Run 'git-crypt init' first", gitCryptDir)
+	}
+
+	// Ensure .gitattributes has the git-crypt pattern
+	if err := config.EnsureGitCryptAttributes(outputDir); err != nil {
+		return 0, err
+	}
+	fmt.Printf("Ensured .gitattributes has git-crypt pattern\n")
+
+	// Create plaintext secrets file (git-crypt encrypts on commit)
+	outputFile := filepath.Join(outputDir, config.SecretsFileNamePlain(env))
+	if _, statErr := os.Stat(outputFile); statErr == nil {
+		var overwrite bool
+		err := huh.NewConfirm().
+			Title(fmt.Sprintf("%s already exists. Overwrite?", config.SecretsFileNamePlain(env))).
+			Value(&overwrite).
+			Run()
+		if err != nil {
+			return 0, fmt.Errorf("prompt failed: %w", err)
+		}
+		if !overwrite {
+			return 0, nil
+		}
+	}
+
+	envSecrets, err := promptEnvironmentSecrets(env)
+	if err != nil {
+		return 0, err
+	}
+
+	plaintextData, err := yaml.Marshal(envSecrets)
+	if err != nil {
+		return 0, fmt.Errorf("failed to marshal secrets: %w", err)
+	}
+
+	if err := os.WriteFile(outputFile, plaintextData, 0600); err != nil {
+		return 0, fmt.Errorf("failed to write %s: %w", outputFile, err)
+	}
+
+	fmt.Printf("Created %s (plaintext — git-crypt encrypts on commit)\n", outputFile)
+	return 1, nil
 }
 
 func getProviderKey(provider string) (string, error) {

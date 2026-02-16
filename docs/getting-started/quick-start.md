@@ -13,7 +13,7 @@ This produces the `cluster-bootstrap` binary in the `cli/` directory.
 
 ## 2. Initialize secrets (first time only)
 
-Run the interactive init command to set up SOPS encryption and create per-environment secrets files:
+Run the interactive init command to configure encryption and create per-environment secrets files:
 
 ```bash
 ./cli/cluster-bootstrap init
@@ -21,11 +21,16 @@ Run the interactive init command to set up SOPS encryption and create per-enviro
 
 This will:
 
-1. Prompt you to choose a SOPS provider (age, AWS KMS, or GCP KMS)
-2. Collect your encryption key
-3. Generate a `.sops.yaml` configuration
-4. Interactively collect secrets for each environment (repo URL, target revision, SSH private key)
-5. Create encrypted `secrets.<env>.enc.yaml` files
+1. Prompt you to choose an encryption provider (age, AWS KMS, GCP KMS, or git-crypt)
+2. For SOPS providers: collect the encryption key, generate `.sops.yaml`, create encrypted `secrets.<env>.enc.yaml` files
+3. For git-crypt: verify `git-crypt init` has been run, update `.gitattributes`, create plaintext `secrets.<env>.yaml` files
+
+### Using git-crypt instead of SOPS
+
+```bash
+git-crypt init
+./cli/cluster-bootstrap init --provider git-crypt
+```
 
 ## 3. Bootstrap the cluster
 
@@ -37,7 +42,7 @@ Run the bootstrap command with your target environment:
 
 This performs the following steps:
 
-1. Decrypts environment secrets using SOPS + your age key
+1. Loads secrets — decrypts via SOPS (default) or reads plaintext git-crypt files
 2. Creates the `argocd` namespace
 3. Creates the `repo-ssh-key` Secret with your Git SSH credentials
 4. Installs ArgoCD via Helm (using `components/argocd/` chart and values)
@@ -53,14 +58,23 @@ This performs the following steps:
 # Use a specific kubeconfig or context
 ./cli/cluster-bootstrap bootstrap dev --kubeconfig ~/.kube/my-config --context my-cluster
 
-# Specify age key location
+# Specify age key location (SOPS)
 ./cli/cluster-bootstrap bootstrap dev --age-key-file ./age-key.txt
+
+# Use git-crypt encryption
+./cli/cluster-bootstrap bootstrap dev --encryption git-crypt
+
+# git-crypt with key stored in cluster
+./cli/cluster-bootstrap bootstrap dev --encryption git-crypt --gitcrypt-key-file ./git-crypt-key
 
 # Dry run — print manifests without applying
 ./cli/cluster-bootstrap bootstrap dev --dry-run
 
 # Skip ArgoCD Helm install (if already installed)
 ./cli/cluster-bootstrap bootstrap dev --skip-argocd-install
+
+# Repo content in a subdirectory with custom app path
+./cli/cluster-bootstrap --base-dir ./k8s bootstrap dev --app-path k8s/apps
 ```
 
 ## 4. Access ArgoCD

@@ -20,7 +20,7 @@ Online documentation available at [Cluster Boostrap Docs](https://user-cube.gith
 
 - `kubectl` configured with access to the target cluster
 - `helm` (for local template testing)
-- `sops` and `age` (for secrets encryption/decryption)
+- `sops` and `age` (for secrets encryption/decryption) **or** `git-crypt` (alternative encryption backend)
 - `go` 1.25+ (to build the CLI)
 - `task` ([Task runner](https://taskfile.dev/))
 - `pre-commit` ([pre-commit hooks](https://pre-commit.com/))
@@ -48,10 +48,27 @@ task build
 
 This will:
 
-1. Decrypt environment secrets using SOPS + age
+1. Decrypt environment secrets (SOPS + age by default, or git-crypt)
 2. Create the `argocd` namespace and SSH credentials secret
 3. Install ArgoCD via Helm
 4. Deploy the root **App of Apps** Application
+
+#### Using git-crypt instead of SOPS
+
+```bash
+./cli/cluster-bootstrap init --provider git-crypt
+./cli/cluster-bootstrap bootstrap dev --encryption git-crypt
+```
+
+#### Repo content in a subdirectory
+
+If your Kubernetes manifests live in a subdirectory (e.g. `k8s/`):
+
+```bash
+./cli/cluster-bootstrap --base-dir ./k8s bootstrap dev --app-path k8s/apps
+```
+
+`--base-dir` resolves local file paths (Chart.yaml, values, secrets). `--app-path` sets the `spec.source.path` in the ArgoCD Application CR.
 
 ### 4. Access ArgoCD UI
 
@@ -98,8 +115,16 @@ The `apps/` chart uses a **single dynamic template** that iterates over a `compo
 | Command | Description |
 |---------|-------------|
 | `bootstrap <env>` | Full cluster bootstrap (decrypt secrets, install ArgoCD, deploy App of Apps) |
-| `init` | Interactive setup for SOPS config and encrypted secrets files |
+| `init` | Interactive setup for encryption config and secrets files |
 | `vault-token` | Store Vault root token as Kubernetes secret |
+| `gitcrypt-key` | Store git-crypt symmetric key as Kubernetes secret |
+
+### Global Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--base-dir` | `.` | Base directory for repo content (local file resolution) |
+| `-v, --verbose` | `false` | Enable verbose output |
 
 ## Development
 
@@ -124,7 +149,7 @@ task docs-serve   # Serve MkDocs documentation locally
 
 ### Secrets example
 
-`secrets.example.enc.yaml` contains the expected secrets structure. To create a new environment:
+**SOPS (default):** `secrets.example.enc.yaml` contains the expected secrets structure. To create a new environment:
 
 ```bash
 cp secrets.example.enc.yaml secrets.myenv.enc.yaml
@@ -132,6 +157,13 @@ sops --encrypt --in-place secrets.myenv.enc.yaml
 ```
 
 Or use the CLI interactively: `./cli/cluster-bootstrap init myenv`
+
+**git-crypt:** Secrets are stored as plaintext YAML (`secrets.<env>.yaml`) and encrypted transparently by git-crypt on commit:
+
+```bash
+git-crypt init
+./cli/cluster-bootstrap init --provider git-crypt myenv
+```
 
 To use a custom `.sops.yaml` path, set `SOPS_CONFIG` in your `.env`:
 
