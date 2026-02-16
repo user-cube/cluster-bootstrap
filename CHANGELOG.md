@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.0.0...v1.1.0) (2026-02-16)
+
+
+### Features
+
+* Improvements ([#2](https://github.com/user-cube/cluster-bootstrap/issues/2)) ([d64b4e9](https://github.com/user-cube/cluster-bootstrap/commit/d64b4e989b093b38bcdf31a7f8da8a5f3b70a62e))
+
 # 1.0.0 (2026-02-15)
 
 
