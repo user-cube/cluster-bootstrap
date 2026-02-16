@@ -59,8 +59,47 @@ jobs:
 
       - uses: azure/setup-helm@v4
 
-      - name: Lint charts with templates
+      - name: Lint all charts
         run: |
           helm lint apps/
-          helm lint components/argocd-repo-secret/
-          helm lint components/vault/
+          for chart in components/*/; do
+            echo "Linting $chart..."
+            if [ -f "$chart/Chart.lock" ]; then
+              helm dependency build "$chart"
+            fi
+            helm lint "$chart"
+          done
+
+  helm-validate:
+    name: Helm Validate Values
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [dev, staging, prod]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+
+      - name: Build chart dependencies
+        run: |
+          for chart in components/*/; do
+            if [ -f "$chart/Chart.lock" ]; then
+              helm dependency build "$chart"
+            fi
+          done
+
+      - name: Validate apps values
+        run: helm template apps/ -f apps/values/${{ matrix.environment }}.yaml
+
+      - name: Validate component values
+        run: |
+          for chart in components/*/; do
+            name=$(basename "$chart")
+            base="$chart/values/base.yaml"
+            env_file="$chart/values/${{ matrix.environment }}.yaml"
+            if [ -f "$base" ] && [ -f "$env_file" ]; then
+              echo "Validating $name for ${{ matrix.environment }}..."
+              helm template "$chart" -f "$base" -f "$env_file"
+            fi
+          done
