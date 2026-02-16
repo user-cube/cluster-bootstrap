@@ -64,7 +64,7 @@ jobs:
           helm lint apps/
           for chart in components/*/; do
             echo "Linting $chart..."
-            if [ -f "$chart/Chart.lock" ]; then
+            if grep -q "^dependencies:" "$chart/Chart.yaml"; then
               helm dependency build "$chart"
             fi
             values_args=""
@@ -88,7 +88,7 @@ jobs:
       - name: Build chart dependencies
         run: |
           for chart in components/*/; do
-            if [ -f "$chart/Chart.lock" ]; then
+            if grep -q "^dependencies:" "$chart/Chart.yaml"; then
               helm dependency build "$chart"
             fi
           done
