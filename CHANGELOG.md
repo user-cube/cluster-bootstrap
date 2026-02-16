@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/user-cube/cluster-bootstrap/compare/v1.1.0...v1.1.1) (2026-02-16)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/charmbracelet/huh to v0.8.0 ([#10](https://github.com/user-cube/cluster-bootstrap/issues/10)) ([c434d52](https://github.com/user-cube/cluster-bootstrap/commit/c434d5238e5d993992867980451f4a99e41fe763))
+
 # [1.1.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.0.0...v1.1.0) (2026-02-16)
 
 
