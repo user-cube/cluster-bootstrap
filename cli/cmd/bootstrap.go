@@ -273,7 +273,18 @@ func validateBootstrapInputs(env string) error {
 	}
 	appFullPath := filepath.Join(baseDir, appPath)
 	if _, err := os.Stat(appFullPath); err != nil {
-		return fmt.Errorf("app-path %s does not exist under base-dir: %w", appPath, err)
+		if appPath == "apps" {
+			detected, detectErr := autoDetectAppPath(baseDir)
+			if detectErr != nil {
+				return fmt.Errorf("app-path %s does not exist under base-dir: %w", appPath, err)
+			}
+			appPath = detected
+			if verbose {
+				fmt.Printf("  App path auto-detected: %s\n", appPath)
+			}
+		} else {
+			return fmt.Errorf("app-path %s does not exist under base-dir: %w", appPath, err)
+		}
 	}
 
 	if secretsFile != "" {
@@ -292,6 +303,44 @@ func validateBootstrapInputs(env string) error {
 	}
 
 	return nil
+}
+
+func autoDetectAppPath(base string) (string, error) {
+	var candidates []string
+	_ = filepath.WalkDir(base, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if d.Name() != "Chart.yaml" {
+			return nil
+		}
+		dir := filepath.Dir(path)
+		if _, err := os.Stat(filepath.Join(dir, "templates", "application.yaml")); err != nil {
+			return nil
+		}
+		rel, err := filepath.Rel(base, dir)
+		if err != nil {
+			return nil
+		}
+		candidates = append(candidates, rel)
+		return nil
+	})
+
+	if len(candidates) == 0 {
+		return "", fmt.Errorf("no app chart found under base-dir")
+	}
+
+	// Prefer a directory named "apps" if present.
+	for _, candidate := range candidates {
+		if filepath.Base(candidate) == "apps" {
+			return candidate, nil
+		}
+	}
+
+	return candidates[0], nil
 }
 
 func printYAMLish(obj interface{}) {

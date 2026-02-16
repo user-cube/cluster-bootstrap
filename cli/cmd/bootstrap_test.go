@@ -66,4 +66,14 @@ func TestValidateBootstrapInputs(t *testing.T) {
 
 	appPath = "/abs/path"
 	assert.ErrorContains(t, validateBootstrapInputs("dev"), "app-path must be relative")
+
+	appPath = "apps"
+	encryption = "sops"
+	secretsFile = filepath.Join(tmpDir, "secrets.dev.enc.yaml")
+	require.NoError(t, os.RemoveAll(filepath.Join(tmpDir, "apps")))
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "k8s", "apps", "templates"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "k8s", "apps", "Chart.yaml"), []byte("apiVersion: v2\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "k8s", "apps", "templates", "application.yaml"), []byte("kind: Application\n"), 0644))
+	require.NoError(t, validateBootstrapInputs("dev"))
+	assert.Equal(t, filepath.Join("k8s", "apps"), appPath)
 }
