@@ -1,3 +1,10 @@
+## [1.1.6](https://github.com/user-cube/cluster-bootstrap/compare/v1.1.5...v1.1.6) (2026-02-16)
+
+
+### Bug Fixes
+
+* fix cicd ([928076e](https://github.com/user-cube/cluster-bootstrap/commit/928076e6872f53d3d8ea14f7d8164e6b607ab3f6))
+
 ## [1.1.5](https://github.com/user-cube/cluster-bootstrap/compare/v1.1.4...v1.1.5) (2026-02-16)
 
 
