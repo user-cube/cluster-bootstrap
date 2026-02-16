@@ -1,3 +1,10 @@
+## [1.1.2](https://github.com/user-cube/cluster-bootstrap/compare/v1.1.1...v1.1.2) (2026-02-16)
+
+
+### Bug Fixes
+
+* **deps:** update kubernetes go modules to v0.35.1 ([#4](https://github.com/user-cube/cluster-bootstrap/issues/4)) ([10ffaf0](https://github.com/user-cube/cluster-bootstrap/commit/10ffaf0a32452a4367e29b63c43f7574c9aaf50f))
+
 ## [1.1.1](https://github.com/user-cube/cluster-bootstrap/compare/v1.1.0...v1.1.1) (2026-02-16)
 
 
