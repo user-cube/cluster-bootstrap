@@ -115,6 +115,7 @@ The `apps/` chart uses a **single dynamic template** that iterates over a `compo
 | Command | Description |
 |---------|-------------|
 | `bootstrap <env>` | Full cluster bootstrap (decrypt secrets, install ArgoCD, deploy App of Apps) |
+| `doctor` | Run prerequisite checks for tooling and cluster access |
 | `init` | Interactive setup for encryption config and secrets files |
 | `vault-token` | Store Vault root token as Kubernetes secret |
 | `gitcrypt-key` | Store git-crypt symmetric key as Kubernetes secret |

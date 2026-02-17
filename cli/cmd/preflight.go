@@ -26,14 +26,30 @@ func CheckKubectlAvailable(strict bool) error {
 // CheckKubectlClusterAccess verifies that kubectl can connect to the cluster.
 // This checks if the current context is valid and accessible.
 func CheckKubectlClusterAccess() error {
+	return CheckKubectlClusterAccessWithConfig("", "")
+}
+
+// CheckKubectlClusterAccessWithConfig verifies that kubectl can connect to the cluster
+// using the provided kubeconfig and context.
+func CheckKubectlClusterAccessWithConfig(kubeconfig, kubeContext string) error {
 	path, err := exec.LookPath("kubectl")
 	if err != nil {
 		return fmt.Errorf("kubectl not found in PATH: %w", err)
 	}
-	cmd := exec.Command(path, "cluster-info") // #nosec G204
+
+	args := make([]string, 0, 6)
+	if kubeconfig != "" {
+		args = append(args, "--kubeconfig", kubeconfig)
+	}
+	if kubeContext != "" {
+		args = append(args, "--context", kubeContext)
+	}
+	args = append(args, "cluster-info")
+
+	cmd := exec.Command(path, args...) // #nosec G204
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("cannot connect to cluster: %w\n  output: %s\n  hint: verify kubeconfig is set correctly and cluster is accessible", err, string(output))
+		return fmt.Errorf("cannot connect to cluster: %w\n  output: %s\n  hint: verify kubeconfig/context and cluster access", err, string(output))
 	}
 	return nil
 }

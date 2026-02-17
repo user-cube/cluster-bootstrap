@@ -4,26 +4,26 @@ repo_url: https://github.com/user-cube/cluster-bootstrap
 repo_name: user-cube/cluster-bootstrap
 
 theme:
-  name: material
-  palette:
-    - scheme: default
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    - scheme: slate
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
-  features:
-    - navigation.sections
-    - navigation.expand
-    - navigation.top
-    - search.highlight
-    - content.code.copy
+    name: material
+    palette:
+      - scheme: default
+        primary: indigo
+        accent: indigo
+        toggle:
+            icon: material/brightness-7
+            name: Switch to dark mode
+      - scheme: slate
+        primary: indigo
+        accent: indigo
+        toggle:
+            icon: material/brightness-4
+            name: Switch to light mode
+    features:
+      - navigation.sections
+      - navigation.expand
+      - navigation.top
+      - search.highlight
+      - content.code.copy
 
 nav:
   - Home: index.md
@@ -50,6 +50,7 @@ nav:
   - CLI:
       - Overview: cli/index.md
       - bootstrap: cli/bootstrap.md
+      - doctor: cli/doctor.md
       - init: cli/init.md
       - vault-token: cli/vault-token.md
       - gitcrypt-key: cli/gitcrypt-key.md
@@ -59,12 +60,12 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.superfences
   - pymdownx.tabbed:
-      alternate_style: true
+        alternate_style: true
   - pymdownx.highlight:
-      anchor_linenums: true
+        anchor_linenums: true
   - pymdownx.inlinehilite
   - tables
   - attr_list
   - md_in_html
   - toc:
-      permalink: true
+        permalink: true
