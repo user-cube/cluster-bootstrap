@@ -31,6 +31,12 @@ jobs:
         with:
           node-version: "24"
 
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ secrets.DEVOPS_BUDDY_APP_ID }}
+          private-key: ${{ secrets.DEVOPS_BUDDY_PRIVATE_KEY }}
+
       - id: semantic
         uses: cycjimmy/semantic-release-action@v4
         with:
@@ -38,7 +44,7 @@ jobs:
             @semantic-release/changelog
             @semantic-release/git
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app.outputs.token }}
 
   goreleaser:
     if: github.repository == 'user-cube/cluster-bootstrap' && needs.release.outputs.new-release == 'true'
