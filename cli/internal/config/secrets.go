@@ -7,7 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/sops"
+	"github.com/user-cube/cluster-bootstrap/cli/internal/sops"
 )
 
 // gitCryptMagic is the magic header written by git-crypt to encrypted files.

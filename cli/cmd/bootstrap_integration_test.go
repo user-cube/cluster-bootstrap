@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/config"
-	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/k8s"
+	"github.com/user-cube/cluster-bootstrap/cli/internal/config"
+	"github.com/user-cube/cluster-bootstrap/cli/internal/k8s"
 )
 
 // TestBootstrapIntegration_PermissionDenied tests a bootstrap scenario where namespace creation fails with permission denied.

@@ -12,8 +12,8 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/config"
-	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/sops"
+	"github.com/user-cube/cluster-bootstrap/cli/internal/config"
+	"github.com/user-cube/cluster-bootstrap/cli/internal/sops"
 )
 
 var (

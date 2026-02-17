@@ -11,10 +11,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/config"
-	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/helm"
-	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/k8s"
-	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/sops"
+	"github.com/user-cube/cluster-bootstrap/cli/internal/config"
+	"github.com/user-cube/cluster-bootstrap/cli/internal/helm"
+	"github.com/user-cube/cluster-bootstrap/cli/internal/k8s"
+	"github.com/user-cube/cluster-bootstrap/cli/internal/sops"
 )
 
 var (

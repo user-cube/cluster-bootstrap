@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/k8s"
+	"github.com/user-cube/cluster-bootstrap/cli/internal/k8s"
 
 	"golang.org/x/term"
 	corev1 "k8s.io/api/core/v1"
