@@ -194,8 +194,17 @@ func runCustomize(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Run go mod tidy if Go files changed
-	if !dryRunFlag && len(changedFiles) > 0 {
+	// Determine whether we need to run go mod tidy based on potentially changed Go files
+	shouldRunGoModTidy := false
+	for f := range changedFiles {
+		if (strings.HasPrefix(f, "cli/") && strings.HasSuffix(f, ".go")) || f == "cli/go.mod" {
+			shouldRunGoModTidy = true
+			break
+		}
+	}
+
+	// Run go mod tidy if relevant Go files under cli/ changed
+	if !dryRunFlag && shouldRunGoModTidy {
 		if verbose {
 			fmt.Println("\n🔄 Running go mod tidy...")
 		}
