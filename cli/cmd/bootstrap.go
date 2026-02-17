@@ -284,9 +284,8 @@ func buildDryRunObjects(envSecrets *config.EnvironmentSecrets, env, appPath stri
 		"metadata": map[string]interface{}{
 			"name":      "repo-ssh-key",
 			"namespace": "argocd",
-			//nolint:gosec // these are Kubernetes labels, not credentials
 			"labels": map[string]string{
-				"argocd.argoproj.io/secret-type": "repo-creds",
+				"argocd.argoproj.io/secret-type": "repo-creds", //nolint:gosec // these are Kubernetes labels, not credentials
 			},
 			"annotations": map[string]string{
 				"managed-by":                   "argocd.argoproj.io",

@@ -44,9 +44,8 @@ func (c *Client) CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "repo-ssh-key",
 			Namespace: "argocd",
-			//nolint:gosec // these are Kubernetes labels, not credentials
 			Labels: map[string]string{
-				"argocd.argoproj.io/secret-type": "repo-creds",
+				"argocd.argoproj.io/secret-type": "repo-creds", //nolint:gosec // these are Kubernetes labels, not credentials
 			},
 			Annotations: map[string]string{
 				"managed-by":                   "argocd.argoproj.io",
