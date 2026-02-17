@@ -345,8 +345,20 @@ func detectCurrentValues(workspaceRoot string) (org, repo string, err error) {
 }
 
 func detectCurrentModuleSuffix(workspaceRoot string) (string, error) {
-	goModPath := filepath.Join(workspaceRoot, "cli", "go.mod")
-	content, err := os.ReadFile(goModPath) //#nosec G304 -- path is constructed from detected workspace root, not user input
+	// Try both old and new directory names for backward compatibility
+	possiblePaths := []string{
+		filepath.Join(workspaceRoot, "cluster-bootstrap-cli", "go.mod"),
+		filepath.Join(workspaceRoot, "cli", "go.mod"),
+	}
+
+	var content []byte
+	var err error
+	for _, goModPath := range possiblePaths {
+		content, err = os.ReadFile(goModPath) //#nosec G304 -- path is constructed from detected workspace root, not user input
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return "", err
 	}

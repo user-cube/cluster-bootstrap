@@ -482,8 +482,8 @@ func TestEndToEnd_Customization(t *testing.T) {
 	err = os.WriteFile(filepath.Join(appsDir, "values.yaml"), []byte(appsValuesContent), 0644)
 	require.NoError(t, err)
 
-	// Create cli/go.mod
-	goModContent := `module github.com/user-cube/cluster-bootstrap/cli
+	// Create cli/go.mod (using current module name)
+	goModContent := `module github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli
 
 go 1.25.0
 `
@@ -494,7 +494,7 @@ go 1.25.0
 	goFileContent := `package cmd
 
 import (
-	"github.com/user-cube/cluster-bootstrap/cli/internal/config"
+	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/config"
 )
 `
 	err = os.WriteFile(filepath.Join(cmdDir, "test.go"), []byte(goFileContent), 0644)
