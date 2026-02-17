@@ -1,3 +1,16 @@
+# [1.4.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.3.1...v1.4.0) (2026-02-17)
+
+
+### Bug Fixes
+
+* fix bypass rules ([79fdce9](https://github.com/user-cube/cluster-bootstrap/commit/79fdce9973996f735ee64f96b9af5f684466a88f))
+
+
+### Features
+
+* fix bypass ([daa2e57](https://github.com/user-cube/cluster-bootstrap/commit/daa2e57a7e1982e3d7e132aeec2d8ad04f638ece))
+* Major improvements ([#30](https://github.com/user-cube/cluster-bootstrap/issues/30)) ([48e5775](https://github.com/user-cube/cluster-bootstrap/commit/48e57758406fe69060a68bdcfc346cda365ebbe3))
+
 ## [1.3.1](https://github.com/user-cube/cluster-bootstrap/compare/v1.3.0...v1.3.1) (2026-02-17)
 
 
