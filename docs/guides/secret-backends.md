@@ -163,7 +163,7 @@ backend: vault
 **Vault → No Backend:**
 ```bash
 # 1. Bootstrap with current backend (continues working)
-./cluster-bootstrap bootstrap dev
+./cluster-bootstrap-cli bootstrap dev
 
 # 2. Update values
 backend: none
@@ -210,10 +210,10 @@ kubectl describe secret repo-ssh-key -n argocd
 
 ```bash
 # 1. Verify current setup works
-./cluster-bootstrap bootstrap dev
+./cluster-bootstrap-cli bootstrap dev
 
 # 2. Test new backend with dry-run
-./cluster-bootstrap bootstrap dev --dry-run
+./cluster-bootstrap-cli bootstrap dev --dry-run
 
 # 3. Update values and apply
 # (ArgoCD will reconcile automatically)

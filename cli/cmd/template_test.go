@@ -483,7 +483,7 @@ func TestEndToEnd_Customization(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create cli/go.mod
-	goModContent := `module github.com/user-cube/cluster-bootstrap/cli
+	goModContent := `module github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli
 
 go 1.25.0
 `
@@ -494,7 +494,7 @@ go 1.25.0
 	goFileContent := `package cmd
 
 import (
-	"github.com/user-cube/cluster-bootstrap/cli/internal/config"
+	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/config"
 )
 `
 	err = os.WriteFile(filepath.Join(cmdDir, "test.go"), []byte(goFileContent), 0644)
@@ -511,6 +511,11 @@ import (
 	assert.Equal(t, "user-cube", currentOrg)
 	assert.Equal(t, "cluster-bootstrap", currentRepo)
 
+	// Detect current CLI module suffix
+	currentModuleSuffix, err := detectCurrentModuleSuffix(tmpDir)
+	require.NoError(t, err)
+	assert.Equal(t, "cluster-bootstrap-cli", currentModuleSuffix)
+
 	// Apply replacements
 	replacements := []replacement{
 		{
@@ -521,14 +526,14 @@ import (
 		},
 		{
 			name:    "Go module path",
-			pattern: fmt.Sprintf("module github.com/%s/%s/cli", currentOrg, currentRepo),
-			replace: fmt.Sprintf("module github.com/%s/%s/cli", orgFlag, repoFlag),
+			pattern: fmt.Sprintf("module github.com/%s/%s/%s", currentOrg, currentRepo, currentModuleSuffix),
+			replace: fmt.Sprintf("module github.com/%s/%s/%s", orgFlag, repoFlag, currentModuleSuffix),
 			files:   []string{"cli/go.mod"},
 		},
 		{
 			name:    "Go imports",
-			pattern: fmt.Sprintf(`"github.com/%s/%s/cli/`, currentOrg, currentRepo),
-			replace: fmt.Sprintf(`"github.com/%s/%s/cli/`, orgFlag, repoFlag),
+			pattern: fmt.Sprintf(`"github.com/%s/%s/%s/`, currentOrg, currentRepo, currentModuleSuffix),
+			replace: fmt.Sprintf(`"github.com/%s/%s/%s/`, orgFlag, repoFlag, currentModuleSuffix),
 			files:   []string{"cli/cmd/test.go"},
 		},
 		{
@@ -555,11 +560,11 @@ import (
 
 	updatedGoMod, err := os.ReadFile(filepath.Join(cliDir, "go.mod"))
 	require.NoError(t, err)
-	assert.Contains(t, string(updatedGoMod), "module github.com/mycompany/k8s-gitops/cli")
+	assert.Contains(t, string(updatedGoMod), "module github.com/mycompany/k8s-gitops/cluster-bootstrap-cli")
 
 	updatedGoFile, err := os.ReadFile(filepath.Join(cmdDir, "test.go"))
 	require.NoError(t, err)
-	assert.Contains(t, string(updatedGoFile), `"github.com/mycompany/k8s-gitops/cli/internal/config"`)
+	assert.Contains(t, string(updatedGoFile), `"github.com/mycompany/k8s-gitops/cluster-bootstrap-cli/internal/config"`)
 }
 
 func TestReCustomization_AppPath(t *testing.T) {

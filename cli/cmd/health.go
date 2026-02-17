@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/user-cube/cluster-bootstrap/cli/internal/k8s"
+	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/k8s"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"

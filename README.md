@@ -18,13 +18,16 @@ Online documentation available at [Cluster Boostrap Docs](https://user-cube.gith
 
 ## Prerequisites
 
+**Runtime:**
 - `kubectl` configured with access to the target cluster
 - `helm` (for local template testing)
 - `sops` and `age` (for secrets encryption/decryption) **or** `git-crypt` (alternative encryption backend)
-- `go` 1.25+ (to build the CLI)
+- SSH private key with read access to this repo
+
+**Development (optional):**
+- `go` 1.25+ (to build the CLI from source)
 - `task` ([Task runner](https://taskfile.dev/))
 - `pre-commit` ([pre-commit hooks](https://pre-commit.com/))
-- SSH private key with read access to this repo
 
 ## Quick Start
 
@@ -33,27 +36,51 @@ Online documentation available at [Cluster Boostrap Docs](https://user-cube.gith
 Replace the default `user-cube/cluster-bootstrap` with your organization and repository:
 
 ```bash
-./cli/cluster-bootstrap template customize --org mycompany --repo k8s-gitops
+./cli/cluster-bootstrap-cli template customize --org mycompany --repo k8s-gitops
 ```
 
 This updates Git URLs, GitHub badges, Go module paths, and documentation throughout the codebase. See [Template documentation](docs/cli/template.md) for details.
 
-### 2. Build the CLI
+### 2. Install the CLI
 
+**Option A: Build locally**
 ```bash
 task build
+# Binary will be at: cli/cluster-bootstrap-cli
+```
+
+**Option B: Install globally with `go install`**
+```bash
+# From local source
+go install ./cli
+
+# Or directly from GitHub
+go install github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli@latest
+
+# Verify installation
+cluster-bootstrap-cli --help
+
+# Now you can use it from anywhere:
+cd /path/to/any/project
+cluster-bootstrap-cli bootstrap dev
+```
+
+**Option C: Use task helper**
+```bash
+task install
+# Automatically installs and shows path
 ```
 
 ### 3. Initialize secrets
 
 ```bash
-./cli/cluster-bootstrap init
+./cli/cluster-bootstrap-cli init
 ```
 
 ### 4. Bootstrap the cluster
 
 ```bash
-./cli/cluster-bootstrap bootstrap dev
+./cli/cluster-bootstrap-cli bootstrap dev
 ```
 
 This will:

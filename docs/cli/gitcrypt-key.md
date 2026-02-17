@@ -1,7 +1,7 @@
 # gitcrypt-key
 
 ```bash
-./cli/cluster-bootstrap gitcrypt-key --key-file ./git-crypt-key
+./cli/cluster-bootstrap-cli gitcrypt-key --key-file ./git-crypt-key
 ```
 
 Stores a git-crypt symmetric key as a Kubernetes Secret.

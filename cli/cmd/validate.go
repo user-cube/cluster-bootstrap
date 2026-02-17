@@ -11,9 +11,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/user-cube/cluster-bootstrap/cli/internal/config"
-	"github.com/user-cube/cluster-bootstrap/cli/internal/k8s"
-	"github.com/user-cube/cluster-bootstrap/cli/internal/sops"
+	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/config"
+	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/k8s"
+	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/sops"
 )
 
 type validateResult struct {

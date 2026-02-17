@@ -1,9 +1,9 @@
 # vault-token
 
 ```bash
-./cli/cluster-bootstrap vault-token --token <root-token>
-echo "<root-token>" | ./cli/cluster-bootstrap vault-token
-./cli/cluster-bootstrap vault-token
+./cli/cluster-bootstrap-cli vault-token --token <root-token>
+echo "<root-token>" | ./cli/cluster-bootstrap-cli vault-token
+./cli/cluster-bootstrap-cli vault-token
 ```
 
 Stores the Vault root token as a Kubernetes Secret.
