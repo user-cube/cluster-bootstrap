@@ -35,6 +35,10 @@ These flags are available on all commands:
 | Command | Description |
 |---------|-------------|
 | [`bootstrap`](bootstrap.md) | Full cluster bootstrap sequence |
+| [`template`](template.md) | Customize the template with your organization and repository |
+| [`doctor`](doctor.md) | Check local tools and cluster access |
+| [`status`](status.md) | Show cluster status and component information |
+| [`validate`](validate.md) | Validate local config and secrets |
 | [`init`](init.md) | Interactive encryption setup |
 | [`vault-token`](vault-token.md) | Store Vault root token as K8s Secret |
 | [`gitcrypt-key`](gitcrypt-key.md) | Store git-crypt key as K8s Secret |

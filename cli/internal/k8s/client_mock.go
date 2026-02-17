@@ -36,24 +36,30 @@ func NewMockClient() *MockClient {
 }
 
 // EnsureNamespace simulates namespace creation with mock state.
-func (m *MockClient) EnsureNamespace(ctx context.Context, name string) error {
+func (m *MockClient) EnsureNamespace(ctx context.Context, name string) (bool, error) {
 	if m.EnsureNamespaceErr != nil {
-		return m.EnsureNamespaceErr
+		return false, m.EnsureNamespaceErr
 	}
 	if m.EnsureNamespaceForbidden {
-		return fmt.Errorf("permission denied: cannot create namespace %s: Forbidden", name)
+		return false, fmt.Errorf("permission denied: cannot create namespace %s: Forbidden", name)
 	}
+
+	// Check if namespace already exists
+	if m.Namespaces[name] {
+		return false, nil
+	}
+
 	m.Namespaces[name] = true
-	return nil
+	return true, nil
 }
 
 // CreateRepoSSHSecret simulates secret creation with mock state.
-func (m *MockClient) CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey string, dryRun bool) (*corev1.Secret, error) {
+func (m *MockClient) CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey string, dryRun bool) (*corev1.Secret, bool, error) {
 	if m.CreateRepoSSHSecretErr != nil {
-		return nil, m.CreateRepoSSHSecretErr
+		return nil, false, m.CreateRepoSSHSecretErr
 	}
 	if m.CreateSecretForbidden {
-		return nil, fmt.Errorf("permission denied: cannot create secrets in argocd namespace: Forbidden")
+		return nil, false, fmt.Errorf("permission denied: cannot create secrets in argocd namespace: Forbidden")
 	}
 
 	secret := &corev1.Secret{
@@ -69,6 +75,14 @@ func (m *MockClient) CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivat
 		},
 	}
 
+	// Check if secret already exists to determine created vs updated
+	created := true
+	if m.Secrets["argocd"] != nil {
+		if _, exists := m.Secrets["argocd"]["repo-ssh-key"]; exists {
+			created = false
+		}
+	}
+
 	if !dryRun {
 		if m.Secrets["argocd"] == nil {
 			m.Secrets["argocd"] = make(map[string]*corev1.Secret)
@@ -76,16 +90,16 @@ func (m *MockClient) CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivat
 		m.Secrets["argocd"]["repo-ssh-key"] = secret
 	}
 
-	return secret, nil
+	return secret, created, nil
 }
 
 // CreateGitCryptKeySecret simulates git-crypt key secret creation.
-func (m *MockClient) CreateGitCryptKeySecret(ctx context.Context, keyData []byte) error {
+func (m *MockClient) CreateGitCryptKeySecret(ctx context.Context, keyData []byte) (bool, error) {
 	if m.CreateGitCryptKeyErr != nil {
-		return m.CreateGitCryptKeyErr
+		return false, m.CreateGitCryptKeyErr
 	}
 	if m.CreateSecretForbidden {
-		return fmt.Errorf("permission denied: cannot create secrets in argocd namespace: Forbidden")
+		return false, fmt.Errorf("permission denied: cannot create secrets in argocd namespace: Forbidden")
 	}
 
 	secret := &corev1.Secret{
@@ -95,24 +109,32 @@ func (m *MockClient) CreateGitCryptKeySecret(ctx context.Context, keyData []byte
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
-			"key": keyData,
+			"git-crypt-key": keyData,
 		},
+	}
+
+	// Check if secret already exists to determine created vs updated
+	created := true
+	if m.Secrets["argocd"] != nil {
+		if _, exists := m.Secrets["argocd"]["git-crypt-key"]; exists {
+			created = false
+		}
 	}
 
 	if m.Secrets["argocd"] == nil {
 		m.Secrets["argocd"] = make(map[string]*corev1.Secret)
 	}
 	m.Secrets["argocd"]["git-crypt-key"] = secret
-	return nil
+	return created, nil
 }
 
 // ApplyAppOfApps simulates Application CR creation.
-func (m *MockClient) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, dryRun bool) (string, error) {
+func (m *MockClient) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, dryRun bool) (string, bool, error) {
 	if m.ApplyAppOfAppsErr != nil {
-		return "", m.ApplyAppOfAppsErr
+		return "", false, m.ApplyAppOfAppsErr
 	}
 	if m.CreateSecretForbidden {
-		return "", fmt.Errorf("permission denied: cannot apply Application CRD: Forbidden")
+		return "", false, fmt.Errorf("permission denied: cannot apply Application CRD: Forbidden")
 	}
 
 	app := &unstructured.Unstructured{
@@ -133,11 +155,17 @@ func (m *MockClient) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision
 		},
 	}
 
+	// Check if application already exists to determine created vs updated
+	created := true
+	if _, exists := m.Applications["app-of-apps"]; exists {
+		created = false
+	}
+
 	if !dryRun {
 		m.Applications["app-of-apps"] = app
 	}
 
-	return "", nil
+	return "", created, nil
 }
 
 // GetSecret retrieves a stored secret from the mock (for testing verification).
@@ -156,8 +184,8 @@ func (m *MockClient) GetApplication(name string) *unstructured.Unstructured {
 // ClientInterface defines the interface that both Client and MockClient implement.
 // This is useful for testing code that uses a K8s client.
 type ClientInterface interface {
-	EnsureNamespace(ctx context.Context, name string) error
-	CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey string, dryRun bool) (*corev1.Secret, error)
-	CreateGitCryptKeySecret(ctx context.Context, keyData []byte) error
-	ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, dryRun bool) (string, error)
+	EnsureNamespace(ctx context.Context, name string) (bool, error)
+	CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey string, dryRun bool) (*corev1.Secret, bool, error)
+	CreateGitCryptKeySecret(ctx context.Context, keyData []byte) (bool, error)
+	ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, dryRun bool) (string, bool, error)
 }

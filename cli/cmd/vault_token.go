@@ -56,7 +56,7 @@ func runVaultToken(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
-	if err := client.EnsureNamespace(ctx, "vault"); err != nil {
+	if _, err := client.EnsureNamespace(ctx, "vault"); err != nil {
 		return err
 	}
 

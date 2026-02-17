@@ -10,16 +10,16 @@ import (
 )
 
 // EnsureNamespace creates a namespace if it does not already exist.
-func (c *Client) EnsureNamespace(ctx context.Context, name string) error {
+func (c *Client) EnsureNamespace(ctx context.Context, name string) (bool, error) {
 	_, err := c.Clientset.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
 	if err == nil {
-		return nil
+		return false, nil
 	}
 	if !apierrors.IsNotFound(err) {
 		if apierrors.IsForbidden(err) {
-			return fmt.Errorf("permission denied: cannot get namespace %s: %w\n  hint: verify your cluster role has permission to get namespaces", name, err)
+			return false, fmt.Errorf("permission denied: cannot get namespace %s: %w\n  hint: verify your cluster role has permission to get namespaces", name, err)
 		}
-		return fmt.Errorf("failed to get namespace %s: %w", name, err)
+		return false, fmt.Errorf("failed to get namespace %s: %w", name, err)
 	}
 
 	ns := &corev1.Namespace{
@@ -30,16 +30,17 @@ func (c *Client) EnsureNamespace(ctx context.Context, name string) error {
 	_, err = c.Clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
 	if err != nil {
 		if apierrors.IsForbidden(err) {
-			return fmt.Errorf("permission denied: cannot create namespace %s: %w\n  hint: verify your cluster role has permission to create namespaces", name, err)
+			return false, fmt.Errorf("permission denied: cannot create namespace %s: %w\n  hint: verify your cluster role has permission to create namespaces", name, err)
 		}
-		return fmt.Errorf("failed to create namespace %s: %w", name, err)
+		return false, fmt.Errorf("failed to create namespace %s: %w", name, err)
 	}
-	return nil
+	return true, nil
 }
 
 // CreateRepoSSHSecret creates or updates the repo-ssh-key secret in the argocd namespace.
 // This matches the exact labels/annotations from the original install.sh.
-func (c *Client) CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey string, dryRun bool) (*corev1.Secret, error) {
+// Returns the secret and a boolean indicating if it was created (true) or updated (false).
+func (c *Client) CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey string, dryRun bool) (*corev1.Secret, bool, error) {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "repo-ssh-key",
@@ -62,7 +63,7 @@ func (c *Client) CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey
 	}
 
 	if dryRun {
-		return secret, nil
+		return secret, true, nil
 	}
 
 	// Try to update, create if not exists
@@ -70,38 +71,46 @@ func (c *Client) CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			if apierrors.IsForbidden(err) {
-				return nil, fmt.Errorf("permission denied: cannot access secrets in argocd namespace: %w\n  hint: verify your cluster role has permission to get secrets", err)
+				return nil, false, fmt.Errorf("permission denied: cannot access secrets in argocd namespace: %w\n  hint: verify your cluster role has permission to get secrets", err)
 			}
-			return nil, fmt.Errorf("failed to get repo-ssh-key secret: %w", err)
+			return nil, false, fmt.Errorf("failed to get repo-ssh-key secret: %w", err)
 		}
 		_, err = c.Clientset.CoreV1().Secrets("argocd").Create(ctx, secret, metav1.CreateOptions{})
 		if err != nil {
 			if apierrors.IsForbidden(err) {
-				return nil, fmt.Errorf("permission denied: cannot create secrets in argocd namespace: %w\n  hint: verify your cluster role has permission to create secrets", err)
+				return nil, false, fmt.Errorf("permission denied: cannot create secrets in argocd namespace: %w\n  hint: verify your cluster role has permission to create secrets", err)
 			}
-			return nil, fmt.Errorf("failed to create repo-ssh-key secret: %w", err)
+			return nil, false, fmt.Errorf("failed to create repo-ssh-key secret: %w", err)
 		}
-		return secret, nil
+		return secret, true, nil
 	}
 
 	existing.Labels = secret.Labels
 	existing.Annotations = secret.Annotations
 	existing.StringData = secret.StringData
+	// Also update Data field for compatibility with fake clients that don't auto-convert StringData
+	if existing.Data == nil {
+		existing.Data = make(map[string][]byte)
+	}
+	for k, v := range secret.StringData {
+		existing.Data[k] = []byte(v)
+	}
 	_, err = c.Clientset.CoreV1().Secrets("argocd").Update(ctx, existing, metav1.UpdateOptions{})
 	if err != nil {
 		if apierrors.IsForbidden(err) {
-			return nil, fmt.Errorf("permission denied: cannot update secrets in argocd namespace: %w\n  hint: verify your cluster role has permission to update secrets", err)
+			return nil, false, fmt.Errorf("permission denied: cannot update secrets in argocd namespace: %w\n  hint: verify your cluster role has permission to update secrets", err)
 		}
-		return nil, fmt.Errorf("failed to update repo-ssh-key secret: %w", err)
+		return nil, false, fmt.Errorf("failed to update repo-ssh-key secret: %w", err)
 	}
-	return secret, nil
+	return secret, false, nil
 }
 
 // CreateGitCryptKeySecret creates or updates the git-crypt-key secret in the argocd namespace.
 // The key data is the raw symmetric key used by git-crypt.
-func (c *Client) CreateGitCryptKeySecret(ctx context.Context, keyData []byte) error {
-	if err := c.EnsureNamespace(ctx, "argocd"); err != nil {
-		return err
+// Returns a boolean indicating if it was created (true) or updated (false).
+func (c *Client) CreateGitCryptKeySecret(ctx context.Context, keyData []byte) (bool, error) {
+	if _, err := c.EnsureNamespace(ctx, "argocd"); err != nil {
+		return false, err
 	}
 
 	secret := &corev1.Secret{
@@ -122,20 +131,20 @@ func (c *Client) CreateGitCryptKeySecret(ctx context.Context, keyData []byte) er
 	existing, err := c.Clientset.CoreV1().Secrets("argocd").Get(ctx, "git-crypt-key", metav1.GetOptions{})
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to get git-crypt-key secret: %w", err)
+			return false, fmt.Errorf("failed to get git-crypt-key secret: %w", err)
 		}
 		_, err = c.Clientset.CoreV1().Secrets("argocd").Create(ctx, secret, metav1.CreateOptions{})
 		if err != nil {
-			return fmt.Errorf("failed to create git-crypt-key secret: %w", err)
+			return false, fmt.Errorf("failed to create git-crypt-key secret: %w", err)
 		}
-		return nil
+		return true, nil
 	}
 
 	existing.Annotations = secret.Annotations
 	existing.Data = secret.Data
 	_, err = c.Clientset.CoreV1().Secrets("argocd").Update(ctx, existing, metav1.UpdateOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to update git-crypt-key secret: %w", err)
+		return false, fmt.Errorf("failed to update git-crypt-key secret: %w", err)
 	}
-	return nil
+	return false, nil
 }

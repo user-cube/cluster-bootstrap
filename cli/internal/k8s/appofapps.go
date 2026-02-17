@@ -13,8 +13,11 @@ import (
 
 const argoCDNamespace = "argocd"
 
-// ApplyAppOfApps creates the App of Apps root Application CR.
-func (c *Client) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, dryRun bool) (string, error) {
+// ApplyAppOfApps creates or updates the App of Apps root Application CR.
+// Returns a boolean indicating if it was created (true) or updated (false) when not in dry-run mode.
+// NOTE: This function's signature was changed to return an additional boolean value, which is a
+// breaking API change. External callers must be updated to handle the extra return value.
+func (c *Client) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, dryRun bool) (string, bool, error) {
 	app := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "argoproj.io/v1alpha1",
@@ -52,9 +55,9 @@ func (c *Client) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, en
 	if dryRun {
 		data, err := json.MarshalIndent(app.Object, "", "  ")
 		if err != nil {
-			return fmt.Sprintf("%+v", app.Object), nil
+			return fmt.Sprintf("%+v", app.Object), true, nil
 		}
-		return string(data), nil
+		return string(data), true, nil
 	}
 
 	gvr := schema.GroupVersionResource{
@@ -63,18 +66,22 @@ func (c *Client) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, en
 		Resource: "applications",
 	}
 
-	_, err := c.DynamicClient.Resource(gvr).Namespace(argoCDNamespace).Apply(
+	// Check if Application already exists
+	_, err := c.DynamicClient.Resource(gvr).Namespace(argoCDNamespace).Get(ctx, "app-of-apps", metav1.GetOptions{})
+	exists := err == nil
+
+	_, err = c.DynamicClient.Resource(gvr).Namespace(argoCDNamespace).Apply(
 		ctx, "app-of-apps", app, metav1.ApplyOptions{FieldManager: "cluster-bootstrap"},
 	)
 	if err != nil {
 		if apierrors.IsForbidden(err) {
-			return "", fmt.Errorf("permission denied: cannot apply Application CRD: %w\n  hint: verify ArgoCD CRDs are installed and your role has permission to apply them\n  tip: check: kubectl api-resources | grep Application", err)
+			return "", false, fmt.Errorf("permission denied: cannot apply Application CRD: %w\n  hint: verify ArgoCD CRDs are installed and your role has permission to apply them\n  tip: check: kubectl api-resources | grep Application", err)
 		}
 		if apierrors.IsNotFound(err) {
-			return "", fmt.Errorf("ArgoCD CRD not found: %w\n  hint: ensure ArgoCD is installed before creating Applications\n  tip: try: kubectl get crd applications.argoproj.io", err)
+			return "", false, fmt.Errorf("ArgoCD CRD not found: %w\n  hint: ensure ArgoCD is installed before creating Applications\n  tip: try: kubectl get crd applications.argoproj.io", err)
 		}
-		return "", fmt.Errorf("failed to apply App of Apps: %w\n  hint: verify the Application CR is valid and ArgoCD is running", err)
+		return "", false, fmt.Errorf("failed to apply App of Apps: %w\n  hint: verify the Application CR is valid and ArgoCD is running", err)
 	}
 
-	return "", nil
+	return "", !exists, nil
 }

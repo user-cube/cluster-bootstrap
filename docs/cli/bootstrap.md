@@ -21,6 +21,26 @@ Performs the full cluster bootstrap sequence.
 7. Optionally waits for cluster components to be ready (if `--wait-for-health` provided)
 8. Prints ArgoCD access instructions
 
+## Idempotent Behavior
+
+The bootstrap command is **fully idempotent** and can be safely run multiple times without causing errors or conflicts:
+
+- **Namespace**: Verified and created only if it doesn't exist
+- **Secrets**: Automatically updated if they already exist, created otherwise
+- **ArgoCD Helm Release**: Upgraded if already installed, installed otherwise
+- **App of Apps Application**: Updated with latest configuration if it exists, created otherwise
+
+When running the command multiple times, you'll see clear feedback indicating whether each resource was **Created** or **Updated**:
+
+```
+✓ Created/verified namespace 'argocd'
+  Created secret repo-ssh-key in argocd
+  ✓ ArgoCD upgraded successfully
+  ✓ App of Apps updated successfully
+```
+
+This makes bootstrap safe to re-run after configuration changes, secret updates, or as part of GitOps workflows.
+
 ## Flags
 
 | Flag | Default | Description |
@@ -37,6 +57,8 @@ Performs the full cluster bootstrap sequence.
 | `--app-path` | `apps` | Path inside the Git repo for the App of Apps source (used in the ArgoCD Application CR `spec.source.path`). If `apps` does not exist and no value is provided, the CLI auto-detects a matching chart (Chart.yaml + templates/application.yaml). |
 | `--wait-for-health` | `false` | Wait for cluster components (ArgoCD, Vault, External Secrets) to be ready after bootstrap |
 | `--health-timeout` | `180` | Timeout in seconds for health checks (default 180 = 3 minutes) |
+| `--report-format` | `summary` | Report format: `summary`, `json`, or `none` |
+| `--report-output` | — | Write JSON report to file |
 
 ## Examples
 
@@ -81,3 +103,144 @@ A detailed health status report is printed showing:
 - Individual component status (Ready, Timeout, NotInstalled, or Error)
 - Duration for each component check
 - Helpful messages for troubleshooting
+
+## Bootstrap Reports
+
+The bootstrap command generates a comprehensive report with detailed metrics about the bootstrap process, including stage timing, resource operations, and health check results.
+
+### Report Formats
+
+Three output formats are available via the `--report-format` flag:
+
+- **`summary`** (default): Human-readable formatted output with tables and visual indicators
+- **`json`**: JSON-formatted report to stdout for integration with automation tools
+- **`none`**: Suppress report output
+
+### Report Contents
+
+The report includes:
+
+- **Overall Status**: Success/failure with total duration
+- **Stage Timing**: Duration for each bootstrap phase (Preflight Checks, Validation, Loading Secrets, K8s Resources, Installing ArgoCD, Deploying App of Apps, Health Checks)
+- **Resource Operations**: Created vs Updated status for each resource (namespace, secrets, Helm releases, ArgoCD Applications)
+- **Health Check Results**: Component health status when `--wait-for-health` is enabled
+- **Configuration**: Environment, encryption method, and paths used
+
+### Examples
+
+```bash
+# Default summary report
+./cli/cluster-bootstrap bootstrap dev
+
+# JSON report to stdout (for piping to jq, logging systems, etc.)
+./cli/cluster-bootstrap bootstrap dev --report-format json
+
+# Save JSON report to file for later analysis
+./cli/cluster-bootstrap bootstrap dev --report-output bootstrap-report.json
+
+# JSON to both stdout and file
+./cli/cluster-bootstrap bootstrap dev --report-format json --report-output bootstrap-report.json
+
+# Suppress report output (show only progress messages)
+./cli/cluster-bootstrap bootstrap dev --report-format none
+
+# Full bootstrap with health checks and report
+./cli/cluster-bootstrap bootstrap dev --wait-for-health --report-output bootstrap-$(date +%Y%m%d-%H%M%S).json
+```
+
+### Sample Summary Report
+
+```
+Bootstrap Report
+================
+
+Status: ✅ Success
+Environment: dev
+Duration: 45.3s
+
+Stages
+------
+Stage                     Duration  Status
+Preflight Checks          2.1s      ✅
+Validation                1.5s      ✅
+Loading Secrets           3.2s      ✅
+K8s Resources             5.8s      ✅
+Installing ArgoCD         28.4s     ✅
+Deploying App of Apps     2.3s      ✅
+Health Checks             2.0s      ✅
+
+Resources
+---------
+Resource           Operation
+Namespace          Created
+SSH Secret         Created
+GitCrypt Secret    Updated
+Helm Release       Upgraded
+App of Apps        Created
+
+Health Checks
+-------------
+Component          Status   Duration
+ArgoCD             Ready    1.2s
+Vault              Ready    0.5s
+External Secrets   Ready    0.3s
+```
+
+### Sample JSON Report
+
+```json
+{
+  "status": "success",
+  "environment": "dev",
+  "start_time": "2024-01-15T10:30:00Z",
+  "end_time": "2024-01-15T10:30:45Z",
+  "duration_seconds": 45.3,
+  "stages": [
+    {
+      "name": "Preflight Checks",
+      "duration_seconds": 2.1,
+      "status": "completed"
+    },
+    {
+      "name": "Validation",
+      "duration_seconds": 1.5,
+      "status": "completed"
+    }
+  ],
+  "resources": {
+    "namespace": {
+      "name": "argocd",
+      "created": true,
+      "operation": "created"
+    },
+    "ssh_secret": {
+      "name": "repo-ssh-secret",
+      "created": true,
+      "operation": "created"
+    },
+    "helm_release": {
+      "name": "argocd",
+      "created": false,
+      "operation": "upgraded"
+    }
+  },
+  "health": {
+    "overall_status": "passed",
+    "components": {
+      "argocd": {
+        "status": "ready",
+        "duration_seconds": 1.2
+      },
+      "vault": {
+        "status": "ready",
+        "duration_seconds": 0.5
+      }
+    }
+  },
+  "config": {
+    "environment": "dev",
+    "encryption": "sops",
+    "app_path": "apps"
+  }
+}
+```

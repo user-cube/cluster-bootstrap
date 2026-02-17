@@ -44,10 +44,15 @@ func runGitCryptKey(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
 	fmt.Println("==> Creating git-crypt-key secret in argocd namespace...")
-	if err := client.CreateGitCryptKeySecret(ctx, keyData); err != nil {
+	created, err := client.CreateGitCryptKeySecret(ctx, keyData)
+	if err != nil {
 		return err
 	}
 
-	fmt.Println("Created secret argocd/git-crypt-key")
+	if created {
+		fmt.Println("Created secret argocd/git-crypt-key")
+	} else {
+		fmt.Println("Updated secret argocd/git-crypt-key")
+	}
 	return nil
 }

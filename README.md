@@ -28,19 +28,29 @@ Online documentation available at [Cluster Boostrap Docs](https://user-cube.gith
 
 ## Quick Start
 
-### 1. Build the CLI
+### 1. Customize the template (first time only)
+
+Replace the default `user-cube/cluster-bootstrap` with your organization and repository:
+
+```bash
+./cli/cluster-bootstrap template customize --org mycompany --repo k8s-gitops
+```
+
+This updates Git URLs, GitHub badges, Go module paths, and documentation throughout the codebase. See [Template documentation](docs/cli/template.md) for details.
+
+### 2. Build the CLI
 
 ```bash
 task build
 ```
 
-### 2. Initialize secrets (first time only)
+### 3. Initialize secrets
 
 ```bash
 ./cli/cluster-bootstrap init
 ```
 
-### 3. Bootstrap the cluster
+### 4. Bootstrap the cluster
 
 ```bash
 ./cli/cluster-bootstrap bootstrap dev
@@ -52,6 +62,25 @@ This will:
 2. Create the `argocd` namespace and SSH credentials secret
 3. Install ArgoCD via Helm
 4. Deploy the root **App of Apps** Application
+
+> **💡 Idempotent by design**: The bootstrap command can be safely run multiple times. It automatically detects existing resources and updates them instead of failing. Perfect for configuration updates or GitOps workflows.
+
+#### Bootstrap Reports
+
+The bootstrap command generates comprehensive reports with timing metrics, resource operations, and health check results:
+
+```bash
+# Default: Human-readable summary report
+./cli/cluster-bootstrap bootstrap dev
+
+# JSON report for automation/metrics collection
+./cli/cluster-bootstrap bootstrap dev --report-format json
+
+# Save report to file
+./cli/cluster-bootstrap bootstrap dev --report-output bootstrap-report.json
+```
+
+See [Bootstrap Reports documentation](docs/cli/bootstrap.md#bootstrap-reports) for details.
 
 #### Using git-crypt instead of SOPS
 
@@ -114,7 +143,11 @@ The `apps/` chart uses a **single dynamic template** that iterates over a `compo
 
 | Command | Description |
 |---------|-------------|
-| `bootstrap <env>` | Full cluster bootstrap (decrypt secrets, install ArgoCD, deploy App of Apps) |
+| `bootstrap <env>` | Full cluster bootstrap (decrypt secrets, install ArgoCD, deploy App of Apps). Generates comprehensive reports with timing metrics and resource operations. Fully idempotent. |
+| `template customize` | Customize the template with your organization and repository (replaces placeholders in configs, docs, and code) |
+| `doctor` | Run prerequisite checks for tooling and cluster access |
+| `status <env>` | Show cluster status and component information |
+| `validate <env>` | Validate local config, secrets, and optional cluster access |
 | `init` | Interactive setup for encryption config and secrets files |
 | `vault-token` | Store Vault root token as Kubernetes secret |
 | `gitcrypt-key` | Store git-crypt symmetric key as Kubernetes secret |

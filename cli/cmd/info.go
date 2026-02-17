@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/user-cube/cluster-bootstrap/cli/internal/k8s"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 // InfoResult holds bootstrap status information
@@ -19,8 +19,21 @@ type InfoResult struct {
 	ClusterVersion string
 	ArgoCDVersion  string
 	Components     []ComponentInfo
+	Applications   []ArgoCDAppInfo
 	Health         *HealthStatus
 	Timestamp      time.Time
+}
+
+// ArgoCDAppInfo holds ArgoCD Application information
+type ArgoCDAppInfo struct {
+	Name         string
+	Namespace    string
+	SyncStatus   string
+	HealthStatus string
+	Destination  string
+	RepoURL      string
+	Path         string
+	SyncWave     string
 }
 
 // ComponentInfo holds information about a component
@@ -66,15 +79,10 @@ func runInfo(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
-	// Create Kubernetes client
-	config, err := buildClientConfig(infoKubeconfig, infoContext)
+	// Create k8s client with dynamic client for CRDs
+	k8sClient, err := k8s.NewClient(infoKubeconfig, infoContext)
 	if err != nil {
-		return fmt.Errorf("failed to build kubeconfig: %w", err)
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return fmt.Errorf("failed to connect to cluster: %w", err)
+		return fmt.Errorf("failed to create k8s client: %w", err)
 	}
 
 	// Gather bootstrap info
@@ -87,29 +95,36 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	}
 
 	// Get cluster version
-	if version, err := clientset.Discovery().ServerVersion(); err == nil {
+	if version, err := k8sClient.Clientset.Discovery().ServerVersion(); err == nil {
 		info.ClusterVersion = version.GitVersion
 	}
 
 	// Check ArgoCD
-	argoCDInfo := checkArgoCDInfo(ctx, clientset)
+	argoCDInfo := checkArgoCDInfo(ctx, k8sClient.Clientset)
 	info.Components = append(info.Components, argoCDInfo)
 	info.ArgoCDVersion = argoCDInfo.Version
 
 	// Check Vault
-	vaultInfo := checkComponentInfo(ctx, clientset, "vault", "vault", "Vault", true)
+	vaultInfo := checkComponentInfo(ctx, k8sClient.Clientset, "vault", "vault", "Vault", true)
 	info.Components = append(info.Components, vaultInfo)
 
 	// Check External Secrets
-	esInfo := checkComponentInfo(ctx, clientset, "external-secrets", "external-secrets", "External Secrets", false)
+	esInfo := checkComponentInfo(ctx, k8sClient.Clientset, "external-secrets", "external-secrets", "External Secrets", false)
 	info.Components = append(info.Components, esInfo)
 
 	// Check other common components
-	prometheusInfo := checkComponentInfo(ctx, clientset, "monitoring", "kube-prometheus-stack", "Kube Prometheus Stack", false)
+	prometheusInfo := checkComponentInfo(ctx, k8sClient.Clientset, "monitoring", "kube-prometheus-stack", "Kube Prometheus Stack", false)
 	info.Components = append(info.Components, prometheusInfo)
 
-	trivyInfo := checkComponentInfo(ctx, clientset, "trivy-system", "trivy-operator", "Trivy Operator", false)
+	trivyInfo := checkComponentInfo(ctx, k8sClient.Clientset, "trivy-system", "trivy-operator", "Trivy Operator", false)
 	info.Components = append(info.Components, trivyInfo)
+
+	// Get ArgoCD Applications
+	if apps, err := getArgoCDApplications(ctx, k8sClient); err == nil {
+		info.Applications = apps
+	} else if verbose {
+		warnf("Failed to list ArgoCD Applications: %v", err)
+	}
 
 	// Optional health check
 	if infoWaitHealth {
@@ -278,6 +293,41 @@ func printInfoResults(info *InfoResult) {
 		}
 	}
 
+	if len(info.Applications) > 0 {
+		fmt.Println()
+		fmt.Println("ArgoCD Applications:")
+		for _, app := range info.Applications {
+			syncIcon := "○"
+			if app.SyncStatus == "Synced" {
+				syncIcon = "✓"
+			} else if app.SyncStatus == "OutOfSync" {
+				syncIcon = "✗"
+			} else if app.SyncStatus != "" {
+				syncIcon = "↻"
+			}
+
+			healthIcon := "○"
+			switch app.HealthStatus {
+			case "Healthy":
+				healthIcon = "✓"
+			case "Degraded", "Missing":
+				healthIcon = "✗"
+			case "Progressing":
+				healthIcon = "↻"
+			case "Suspended":
+				healthIcon = "⏸"
+			}
+
+			fmt.Printf("  %s %s %-20s [Sync: %-10s Health: %-10s]\n", syncIcon, healthIcon, app.Name, app.SyncStatus, app.HealthStatus)
+			if app.Destination != "" {
+				fmt.Printf("     Destination: %s\n", app.Destination)
+			}
+			if app.Path != "" {
+				fmt.Printf("     Path: %s\n", app.Path)
+			}
+		}
+	}
+
 	if info.Health != nil {
 		fmt.Println()
 		PrintHealthStatus(info.Health)
@@ -291,41 +341,72 @@ func printInfoResults(info *InfoResult) {
 	fmt.Println("  • View cluster events: kubectl get events -A --sort-by='.lastTimestamp'")
 }
 
-// buildClientConfig creates a REST config from kubeconfig and context
-func buildClientConfig(kubeconfig, context string) (*rest.Config, error) {
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	if kubeconfig != "" {
-		loadingRules.ExplicitPath = kubeconfig
+// getArgoCDApplications retrieves all ArgoCD Applications from the cluster
+func getArgoCDApplications(ctx context.Context, client *k8s.Client) ([]ArgoCDAppInfo, error) {
+	gvr := schema.GroupVersionResource{
+		Group:    "argoproj.io",
+		Version:  "v1alpha1",
+		Resource: "applications",
 	}
 
-	configOverrides := &clientcmd.ConfigOverrides{}
-	if context != "" {
-		configOverrides.CurrentContext = context
+	list, err := client.DynamicClient.Resource(gvr).Namespace("argocd").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list applications: %w", err)
 	}
 
-	clientConfig := clientcmd.NewNonInteractiveClientConfig(
-		*getMergedConfig(loadingRules),
-		context,
-		configOverrides,
-		loadingRules,
-	)
+	apps := make([]ArgoCDAppInfo, 0, len(list.Items))
+	for _, item := range list.Items {
+		app := parseArgoCDApplication(&item)
+		apps = append(apps, app)
+	}
 
-	return clientConfig.ClientConfig()
+	return apps, nil
 }
 
-// getMergedConfig loads and merges kubeconfig files
-func getMergedConfig(loadingRules *clientcmd.ClientConfigLoadingRules) *clientcmdapi.Config {
-	if loadingRules.ExplicitPath != "" {
-		// Try to load explicit kubeconfig
-		cfg, err := clientcmd.LoadFromFile(loadingRules.ExplicitPath)
-		if err == nil {
-			return cfg
+// parseArgoCDApplication extracts relevant info from an ArgoCD Application unstructured object
+func parseArgoCDApplication(obj *unstructured.Unstructured) ArgoCDAppInfo {
+	app := ArgoCDAppInfo{
+		Name:      obj.GetName(),
+		Namespace: obj.GetNamespace(),
+	}
+
+	// Extract sync status
+	if status, found, _ := unstructured.NestedMap(obj.Object, "status"); found {
+		if sync, ok := status["sync"].(map[string]interface{}); ok {
+			if syncStatus, ok := sync["status"].(string); ok {
+				app.SyncStatus = syncStatus
+			}
+		}
+		if health, ok := status["health"].(map[string]interface{}); ok {
+			if healthStatus, ok := health["status"].(string); ok {
+				app.HealthStatus = healthStatus
+			}
 		}
 	}
-	// Fall back to default
-	cfg, _ := clientcmd.LoadFromFile(clientcmd.RecommendedHomeFile)
-	if cfg != nil {
-		return cfg
+
+	// Extract spec info
+	if spec, found, _ := unstructured.NestedMap(obj.Object, "spec"); found {
+		if destination, ok := spec["destination"].(map[string]interface{}); ok {
+			if namespace, ok := destination["namespace"].(string); ok {
+				app.Destination = namespace
+			}
+		}
+		if source, ok := spec["source"].(map[string]interface{}); ok {
+			if repoURL, ok := source["repoURL"].(string); ok {
+				app.RepoURL = repoURL
+			}
+			if path, ok := source["path"].(string); ok {
+				app.Path = path
+			}
+		}
 	}
-	return clientcmdapi.NewConfig()
+
+	// Extract sync wave annotation
+	if annotations := obj.GetAnnotations(); annotations != nil {
+		if wave, ok := annotations["argocd.argoproj.io/sync-wave"]; ok {
+			app.SyncWave = wave
+		}
+	}
+
+	return app
 }
