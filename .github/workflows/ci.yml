@@ -74,8 +74,7 @@ jobs:
       - name: Run gosec
         uses: securego/gosec@master
         with:
-          args: ./...
-          working-directory: cli
+          args: -exclude-dir=vendor ./cli/...
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
