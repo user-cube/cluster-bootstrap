@@ -128,7 +128,7 @@ func TestCheckSSHKey_Valid(t *testing.T) {
 	// Create a temporary file with proper permissions
 	tmpFile, err := os.CreateTemp("", "test-key-*.pem")
 	require.NoError(t, err)
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	// Set permissions to 600 for SSH key
 	require.NoError(t, os.Chmod(tmpFile.Name(), 0o600))

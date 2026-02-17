@@ -15,7 +15,7 @@ const GitCryptAttributesPattern = "secrets.*.yaml filter=git-crypt diff=git-cryp
 func EnsureGitCryptAttributes(outputDir string) error {
 	path := filepath.Join(outputDir, ".gitattributes")
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // user-provided file path from flag/config
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to read %s: %w", path, err)
 	}
@@ -33,7 +33,7 @@ func EnsureGitCryptAttributes(outputDir string) error {
 		suffix = "\n\n"
 	}
 
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600) //nolint:gosec // user-provided file path from flag/config
 	if err != nil {
 		return fmt.Errorf("failed to open %s: %w", path, err)
 	}

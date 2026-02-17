@@ -31,7 +31,7 @@ func init() {
 }
 
 func runGitCryptKey(cmd *cobra.Command, args []string) error {
-	keyData, err := os.ReadFile(gitCryptKeyFile)
+	keyData, err := os.ReadFile(gitCryptKeyFile) //nolint:gosec // user-provided file path from flag/config
 	if err != nil {
 		return fmt.Errorf("failed to read key file %s: %w", gitCryptKeyFile, err)
 	}

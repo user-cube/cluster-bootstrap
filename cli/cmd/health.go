@@ -258,11 +258,12 @@ func PrintHealthStatus(status *HealthStatus) {
 	fmt.Println("Components:")
 	for _, result := range status.Results {
 		statusStr := result.Status
-		if result.Status == "Ready" {
+		switch result.Status {
+		case "Ready":
 			statusStr = fmt.Sprintf("\033[32m%s\033[0m", "Ready") // Green
-		} else if result.Status == "Timeout" || result.Status == "Error" {
+		case "Timeout", "Error":
 			statusStr = fmt.Sprintf("\033[31m%s\033[0m", result.Status) // Red
-		} else if result.Status == "NotInstalled" {
+		case "NotInstalled":
 			statusStr = fmt.Sprintf("\033[33m%s\033[0m", "NotInstalled") // Yellow
 		}
 		fmt.Printf("  • %-20s %s (%s)\n", result.Component, statusStr, result.Duration.String())

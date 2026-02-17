@@ -252,11 +252,12 @@ func printInfoResults(info *InfoResult) {
 	for _, comp := range info.Components {
 		if comp.Installed {
 			statusColor := "⚠ "
-			if comp.Status == "Ready" {
+			switch comp.Status {
+			case "Ready":
 				statusColor = "✓"
-			} else if comp.Status == "Pending" {
+			case "Pending":
 				statusColor = "⏳"
-			} else if comp.Status == "Progressing" {
+			case "Progressing":
 				statusColor = "↻"
 			}
 

@@ -55,7 +55,7 @@ func LoadSecrets(filePath string, sopsOpts *sops.Options) (*EnvironmentSecrets, 
 // It returns an error if the file still contains the git-crypt magic header,
 // which means it has not been decrypted (git-crypt unlock has not been run).
 func LoadSecretsPlaintext(filePath string) (*EnvironmentSecrets, error) {
-	data, err := os.ReadFile(filePath)
+	data, err := os.ReadFile(filePath) //nolint:gosec // user-provided file path from flag/config
 	if err != nil {
 		return nil, fmt.Errorf("failed to read secrets file: %w", err)
 	}

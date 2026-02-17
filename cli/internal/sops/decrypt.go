@@ -73,7 +73,7 @@ func EncryptWithTarget(filePath, targetPath string, opts *Options) ([]byte, erro
 	defer restore()
 
 	// Read plaintext
-	data, err := os.ReadFile(filePath)
+	data, err := os.ReadFile(filePath) //nolint:gosec // user-provided file path from flag/config
 	if err != nil {
 		return nil, fmt.Errorf("sops encrypt: failed to read file: %w", err)
 	}
