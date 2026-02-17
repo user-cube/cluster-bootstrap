@@ -91,13 +91,40 @@ See [Bootstrap Reports documentation](docs/cli/bootstrap.md#bootstrap-reports) f
 
 #### Repo content in a subdirectory
 
-If your Kubernetes manifests live in a subdirectory (e.g. `k8s/`):
+If your Kubernetes manifests live in a subdirectory (e.g. `k8s/`), you need to configure both the CLI and values file:
 
-```bash
-./cli/cluster-bootstrap --base-dir ./k8s bootstrap dev --app-path k8s/apps
+1. **Update `apps/values.yaml`** to set the base path:
+```yaml
+repo:
+  basePath: "k8s"  # Set to your subdirectory name
 ```
 
-`--base-dir` resolves local file paths (Chart.yaml, values, secrets). `--app-path` sets the `spec.source.path` in the ArgoCD Application CR.
+2. **Run bootstrap** using either method:
+
+From repository root:
+```bash
+./k8s/cli/cluster-bootstrap --base-dir ./k8s bootstrap dev \
+  --app-path k8s/apps \
+  --wait-for-health -v
+```
+
+Or from inside the subdirectory (both work):
+```bash
+cd k8s
+
+# Relative path
+./cli/cluster-bootstrap bootstrap dev --app-path apps --wait-for-health -v
+
+# Or full path
+./cli/cluster-bootstrap bootstrap dev --app-path k8s/apps --wait-for-health -v
+```
+
+**Key points:**
+- The CLI **automatically detects** if you're in a Git subdirectory
+- Works with both relative (`apps`) and full paths (`k8s/apps`)
+- Strips prefixes intelligently for local validation
+- `repo.basePath: "k8s"` in values.yaml ensures component paths include the subdirectory prefix
+- Choose whichever feels most natural to you!
 
 ### 4. Access ArgoCD UI
 

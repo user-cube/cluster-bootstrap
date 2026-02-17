@@ -251,6 +251,36 @@ Common issues and solutions when using the cluster-bootstrap CLI.
    - Test SSH: `ssh -T git@github.com`
 4. Check app repository URL: `kubectl get secret repo-ssh-key -n argocd -o jsonpath='{.data.url}' | base64 -d`
 
+### Repository not found (with subdirectory setup)
+
+**Error:** `ComparisonError: Failed to load target state: failed to generate manifest for source 1 of 1: rpc error: code = Unknown desc = failed to list refs: repository not found`
+
+**Cause:** When your project is in a subdirectory (e.g., `/k8s`), ArgoCD can't find the component paths because they're missing the subdirectory prefix.
+
+**Solution:**
+1. Update `apps/values.yaml` to include the base path:
+   ```yaml
+   repo:
+     url: git@github.com:yourorg/yourrepo.git
+     targetRevision: main
+     basePath: "k8s"  # Add this line with your subdirectory name
+   ```
+
+2. Ensure you bootstrapped with the correct flags:
+   ```bash
+   ./cli/cluster-bootstrap --base-dir ./k8s bootstrap dev --app-path k8s/apps
+   ```
+
+3. Sync the App of Apps to pick up the changes:
+   ```bash
+   kubectl patch application app-of-apps -n argocd --type merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'
+   ```
+
+**How it works:**
+- `--base-dir ./k8s` - tells the CLI where to find local files (Chart.yaml, values, secrets)
+- `--app-path k8s/apps` - sets the App of Apps path in ArgoCD
+- `repo.basePath: "k8s"` - ensures component paths are prefixed (e.g., `k8s/components/argocd` instead of `components/argocd`)
+
 ## Debugging
 
 ### Enable verbose output
@@ -323,8 +353,17 @@ Or with auto-detection (if Chart.yaml + templates/application.yaml exist):
 
 ### Bootstrap with repo in subdirectory
 
+When your manifests are in a subdirectory (e.g., `k8s/`):
+
+1. Update `apps/values.yaml`:
+```yaml
+repo:
+  basePath: "k8s"
+```
+
+2. Run bootstrap:
 ```bash
-./cli/cluster-bootstrap --base-dir ./k8s bootstrap dev
+./cli/cluster-bootstrap --base-dir ./k8s bootstrap dev --app-path k8s/apps
 ```
 
 ### Bootstrap with specific git-crypt key

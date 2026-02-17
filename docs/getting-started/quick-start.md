@@ -77,6 +77,7 @@ This performs the following steps:
 ./cli/cluster-bootstrap bootstrap dev --skip-argocd-install
 
 # Repo content in a subdirectory with custom app path
+# First, update apps/values.yaml to set repo.basePath: "k8s"
 ./cli/cluster-bootstrap --base-dir ./k8s bootstrap dev --app-path k8s/apps
 
 # Wait for components to be ready after bootstrap

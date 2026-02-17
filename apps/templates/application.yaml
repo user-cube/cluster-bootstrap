@@ -15,7 +15,7 @@ spec:
   source:
     repoURL: {{ $.Values.repo.url }}
     targetRevision: {{ $.Values.repo.targetRevision }}
-    path: components/{{ $name }}
+    path: {{ if $.Values.repo.basePath }}{{ $.Values.repo.basePath }}/{{ end }}components/{{ $name }}
     {{- if or (not (hasKey $config "hasValues")) $config.hasValues }}
     helm:
       valueFiles:

@@ -79,7 +79,18 @@ This makes bootstrap safe to re-run after configuration changes, secret updates,
 ./cli/cluster-bootstrap bootstrap dev --dry-run --dry-run-output /tmp/bootstrap.json
 
 # Repo content in a subdirectory
-./cli/cluster-bootstrap --base-dir ./k8s bootstrap dev --app-path k8s/apps
+# First, update apps/values.yaml to set repo.basePath: "k8s"
+
+# Option 1: From repository root with --base-dir
+./k8s/cli/cluster-bootstrap --base-dir ./k8s bootstrap dev \
+  --app-path k8s/apps \
+  --wait-for-health -v
+
+# Option 2: From inside subdirectory (auto-detected)
+cd k8s
+./cli/cluster-bootstrap bootstrap dev \
+  --app-path apps \
+  --wait-for-health -v
 
 # Wait for components to be ready (with 5-minute timeout)
 ./cli/cluster-bootstrap bootstrap dev --wait-for-health --health-timeout 300

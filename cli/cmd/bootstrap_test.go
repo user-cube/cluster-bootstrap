@@ -73,17 +73,20 @@ func TestValidateBootstrapInputs(t *testing.T) {
 	encryption = "sops"
 	secretsFile = filepath.Join(tmpDir, "secrets.dev.enc.yaml")
 
-	require.NoError(t, validateBootstrapInputs("dev"))
+	_, err := validateBootstrapInputs("dev", "apps")
+	require.NoError(t, err)
 
 	secretsFile = filepath.Join(tmpDir, "secrets.dev.yaml")
-	assert.ErrorContains(t, validateBootstrapInputs("dev"), "must end with .enc.yaml")
+	_, err = validateBootstrapInputs("dev", "apps")
+	assert.ErrorContains(t, err, "must end with .enc.yaml")
 
 	encryption = "git-crypt"
 	secretsFile = filepath.Join(tmpDir, "secrets.dev.enc.yaml")
-	assert.ErrorContains(t, validateBootstrapInputs("dev"), "not .enc.yaml")
+	_, err = validateBootstrapInputs("dev", "apps")
+	assert.ErrorContains(t, err, "not .enc.yaml")
 
-	appPath = "/abs/path"
-	assert.ErrorContains(t, validateBootstrapInputs("dev"), "app-path must be relative")
+	_, err = validateBootstrapInputs("dev", "/abs/path")
+	assert.ErrorContains(t, err, "app-path must be relative")
 
 	appPath = "apps"
 	encryption = "sops"
@@ -92,6 +95,10 @@ func TestValidateBootstrapInputs(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "k8s", "apps", "templates"), 0755))
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "k8s", "apps", "Chart.yaml"), []byte("apiVersion: v2\n"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "k8s", "apps", "templates", "application.yaml"), []byte("kind: Application\n"), 0644))
-	require.NoError(t, validateBootstrapInputs("dev"))
-	assert.Equal(t, filepath.Join("k8s", "apps"), appPath)
+
+	// Test with baseDir pointing to k8s subfolder (simulating --base-dir ./k8s)
+	baseDir = filepath.Join(tmpDir, "k8s")
+	localPath, err := validateBootstrapInputs("dev", "k8s/apps")
+	require.NoError(t, err)
+	assert.Equal(t, "apps", localPath)
 }
