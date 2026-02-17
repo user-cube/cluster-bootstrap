@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/user-cube/cluster-bootstrap/cli/internal/config"
+	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/config"
 )
 
 func TestBuildDryRunObjects(t *testing.T) {

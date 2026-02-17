@@ -1,11 +1,11 @@
 # Template Customize
 
-The `template customize` command allows you to personalize the cluster-bootstrap template with your own organization, repository name, and configuration paths.
+The `template customize` command allows you to personalize the cluster-bootstrap-cli template with your own organization, repository name, and configuration paths.
 
 ## Usage
 
 ```bash
-./cli/cluster-bootstrap template customize --org <organization> --repo <repository> [flags]
+./cli/cluster-bootstrap-cli template customize --org <organization> --repo <repository> [flags]
 ```
 
 ## What It Does
@@ -33,7 +33,7 @@ This command replaces template placeholders throughout the codebase:
 Replace the default `user-cube/cluster-bootstrap` with your organization and repository:
 
 ```bash
-./cli/cluster-bootstrap template customize --org mycompany --repo k8s-gitops
+./cli/cluster-bootstrap-cli template customize --org mycompany --repo k8s-gitops
 ```
 
 ### Custom App Path
@@ -41,7 +41,7 @@ Replace the default `user-cube/cluster-bootstrap` with your organization and rep
 If your App of Apps lives in a different directory:
 
 ```bash
-./cli/cluster-bootstrap template customize \
+./cli/cluster-bootstrap-cli template customize \
   --org mycompany \
   --repo k8s-gitops \
   --app-path kubernetes/apps
@@ -52,7 +52,7 @@ If your App of Apps lives in a different directory:
 Preview what would be changed without modifying files:
 
 ```bash
-./cli/cluster-bootstrap template customize \
+./cli/cluster-bootstrap-cli template customize \
   --org mycompany \
   --repo k8s-gitops \
   --dry-run
@@ -63,7 +63,7 @@ Preview what would be changed without modifying files:
 Skip the interactive confirmation prompt:
 
 ```bash
-./cli/cluster-bootstrap template customize \
+./cli/cluster-bootstrap-cli template customize \
   --org mycompany \
   --repo k8s-gitops \
   --force
@@ -159,7 +159,7 @@ Next steps:
 The command is idempotent - it detects if the template is already customized with the provided values:
 
 ```bash
-$ ./cli/cluster-bootstrap template customize --org mycompany --repo k8s-gitops
+$ ./cli/cluster-bootstrap-cli template customize --org mycompany --repo k8s-gitops
 ✅ Template already customized with org=mycompany repo=k8s-gitops
    Use --force to re-apply customization
 ```

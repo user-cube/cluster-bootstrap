@@ -57,7 +57,7 @@ Common issues and solutions when using the cluster-bootstrap CLI.
 3. Verify kubeconfig: `kubectl config view`
 4. Try explicitly setting kubeconfig:
    ```bash
-   ./cli/cluster-bootstrap bootstrap dev --kubeconfig ~/.kube/config --context my-cluster
+   ./cli/cluster-bootstrap-cli bootstrap dev --kubeconfig ~/.kube/config --context my-cluster
    ```
 
 ### Context not found
@@ -68,7 +68,7 @@ Common issues and solutions when using the cluster-bootstrap CLI.
 1. List available contexts: `kubectl config get-contexts`
 2. Use correct context name:
    ```bash
-   ./cli/cluster-bootstrap bootstrap dev --context docker-desktop
+   ./cli/cluster-bootstrap-cli bootstrap dev --context docker-desktop
    ```
 
 ### Invalid kubeconfig file
@@ -120,11 +120,11 @@ Common issues and solutions when using the cluster-bootstrap CLI.
 **Solution:**
 1. Create the secrets file first:
    ```bash
-   ./cli/cluster-bootstrap init --provider sops
+   ./cli/cluster-bootstrap-cli init --provider sops
    ```
 2. Or explicitly provide the file:
    ```bash
-   ./cli/cluster-bootstrap bootstrap dev --secrets-file ./custom-secrets.enc.yaml
+   ./cli/cluster-bootstrap-cli bootstrap dev --secrets-file ./custom-secrets.enc.yaml
    ```
 
 ### Invalid secrets file format
@@ -144,7 +144,7 @@ Common issues and solutions when using the cluster-bootstrap CLI.
 1. Verify age key file exists: `ls ~/.age/key.txt`
 2. Set age key path explicitly:
    ```bash
-   ./cli/cluster-bootstrap bootstrap dev --age-key-file ~/.age/key.txt
+   ./cli/cluster-bootstrap-cli bootstrap dev --age-key-file ~/.age/key.txt
    ```
 3. Or set environment variable:
    ```bash
@@ -204,7 +204,7 @@ Common issues and solutions when using the cluster-bootstrap CLI.
 **Solution:**
 1. ArgoCD is already installed. Skip installation:
    ```bash
-   ./cli/cluster-bootstrap bootstrap dev --skip-argocd-install
+   ./cli/cluster-bootstrap-cli bootstrap dev --skip-argocd-install
    ```
 2. Or uninstall existing release:
    ```bash
@@ -225,7 +225,7 @@ Common issues and solutions when using the cluster-bootstrap CLI.
    ```
 2. Install ArgoCD if missing:
    ```bash
-   ./cli/cluster-bootstrap bootstrap dev
+   ./cli/cluster-bootstrap-cli bootstrap dev
    ```
 3. Wait for CRDs to be created:
    ```bash
@@ -268,7 +268,7 @@ Common issues and solutions when using the cluster-bootstrap CLI.
 
 2. Ensure you bootstrapped with the correct flags:
    ```bash
-   ./cli/cluster-bootstrap --base-dir ./k8s bootstrap dev --app-path k8s/apps
+   ./cli/cluster-bootstrap-cli --base-dir ./k8s bootstrap dev --app-path k8s/apps
    ```
 
 3. Sync the App of Apps to pick up the changes:
@@ -287,7 +287,7 @@ Common issues and solutions when using the cluster-bootstrap CLI.
 
 **Command:**
 ```bash
-./cli/cluster-bootstrap -v bootstrap dev
+./cli/cluster-bootstrap-cli -v bootstrap dev
 ```
 
 This enables:
@@ -300,14 +300,14 @@ This enables:
 
 **Command:**
 ```bash
-./cli/cluster-bootstrap bootstrap dev --dry-run
+./cli/cluster-bootstrap-cli bootstrap dev --dry-run
 ```
 
 This shows manifests that would be created without applying them.
 
 **Output to file:**
 ```bash
-./cli/cluster-bootstrap bootstrap dev --dry-run --dry-run-output /tmp/bootstrap.json
+./cli/cluster-bootstrap-cli bootstrap dev --dry-run --dry-run-output /tmp/bootstrap.json
 ```
 
 ### Check cluster connectivity
@@ -343,12 +343,12 @@ kubectl port-forward svc/argocd-server -n argocd 8080:443
 If your apps are in a different directory:
 
 ```bash
-./cli/cluster-bootstrap bootstrap dev --app-path k8s/apps
+./cli/cluster-bootstrap-cli bootstrap dev --app-path k8s/apps
 ```
 
 Or with auto-detection (if Chart.yaml + templates/application.yaml exist):
 ```bash
-./cli/cluster-bootstrap bootstrap dev
+./cli/cluster-bootstrap-cli bootstrap dev
 ```
 
 ### Bootstrap with repo in subdirectory
@@ -363,13 +363,13 @@ repo:
 
 2. Run bootstrap:
 ```bash
-./cli/cluster-bootstrap --base-dir ./k8s bootstrap dev --app-path k8s/apps
+./cli/cluster-bootstrap-cli --base-dir ./k8s bootstrap dev --app-path k8s/apps
 ```
 
 ### Bootstrap with specific git-crypt key
 
 ```bash
-./cli/cluster-bootstrap bootstrap dev \
+./cli/cluster-bootstrap-cli bootstrap dev \
   --encryption git-crypt \
   --gitcrypt-key-file ./git-crypt-key
 ```
@@ -377,11 +377,11 @@ repo:
 ### Store Vault token after bootstrap
 
 ```bash
-./cli/cluster-bootstrap vault-token --token <root-token>
+./cli/cluster-bootstrap-cli vault-token --token <root-token>
 # Or via stdin
-echo "<root-token>" | ./cli/cluster-bootstrap vault-token
+echo "<root-token>" | ./cli/cluster-bootstrap-cli vault-token
 # Or via prompt
-./cli/cluster-bootstrap vault-token
+./cli/cluster-bootstrap-cli vault-token
 ```
 
 ## Getting Help
@@ -396,8 +396,8 @@ echo "<root-token>" | ./cli/cluster-bootstrap vault-token
 
 If you encounter an issue:
 
-1. Reproduce with verbose output: `./cli/cluster-bootstrap -v bootstrap dev`
-2. Collect dry-run output: `./cli/cluster-bootstrap bootstrap dev --dry-run --dry-run-output /tmp/debug.json`
+1. Reproduce with verbose output: `./cli/cluster-bootstrap-cli -v bootstrap dev`
+2. Collect dry-run output: `./cli/cluster-bootstrap-cli bootstrap dev --dry-run --dry-run-output /tmp/debug.json`
 3. Check cluster resources: `kubectl get all -n argocd`
 4. Share logs without exposing secrets
 5. Report to: https://github.com/user-cube/cluster-bootstrap/issues

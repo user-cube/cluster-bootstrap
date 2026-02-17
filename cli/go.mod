@@ -1,4 +1,4 @@
-module github.com/user-cube/cluster-bootstrap/cli
+module github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli
 
 go 1.25.0
 

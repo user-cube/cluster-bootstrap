@@ -1,6 +1,6 @@
 version: 2
 
-project_name: cluster-bootstrap
+project_name: cluster-bootstrap-cli
 
 before:
   hooks:
@@ -9,7 +9,7 @@ before:
 builds:
   - main: ./main.go
     dir: cli
-    binary: cluster-bootstrap
+    binary: cluster-bootstrap-cli
     env:
       - CGO_ENABLED=0
     goos:

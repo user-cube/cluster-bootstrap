@@ -102,6 +102,12 @@ func runCustomize(cmd *cobra.Command, args []string) error {
 		currentAppPath = defaultAppPath
 	}
 
+	// Detect current CLI module suffix (e.g., "cli" or "cluster-bootstrap-cli")
+	currentModuleSuffix, err := detectCurrentModuleSuffix(workspaceRoot)
+	if err != nil {
+		return fmt.Errorf("failed to detect CLI module suffix: %w", err)
+	}
+
 	// Show summary
 	fmt.Println("\n📝 Template Customization Summary")
 	fmt.Println("═══════════════════════════════════")
@@ -164,14 +170,14 @@ func runCustomize(cmd *cobra.Command, args []string) error {
 		},
 		{
 			name:    "Go module path in go.mod",
-			pattern: fmt.Sprintf("module github.com/%s/%s/cli", currentOrg, currentRepo),
-			replace: fmt.Sprintf("module github.com/%s/%s/cli", orgFlag, repoFlag),
+			pattern: fmt.Sprintf("module github.com/%s/%s/%s", currentOrg, currentRepo, currentModuleSuffix),
+			replace: fmt.Sprintf("module github.com/%s/%s/%s", orgFlag, repoFlag, currentModuleSuffix),
 			files:   []string{"cli/go.mod"},
 		},
 		{
 			name:    "Go import statements",
-			pattern: fmt.Sprintf(`"github.com/%s/%s/cli/`, currentOrg, currentRepo),
-			replace: fmt.Sprintf(`"github.com/%s/%s/cli/`, orgFlag, repoFlag),
+			pattern: fmt.Sprintf(`"github.com/%s/%s/%s/`, currentOrg, currentRepo, currentModuleSuffix),
+			replace: fmt.Sprintf(`"github.com/%s/%s/%s/`, orgFlag, repoFlag, currentModuleSuffix),
 			files:   listGoFiles(workspaceRoot),
 		},
 		{
@@ -328,14 +334,31 @@ func detectCurrentValues(workspaceRoot string) (org, repo string, err error) {
 		return "", "", err
 	}
 
-	// Parse "module github.com/org/repo/cli"
-	re := regexp.MustCompile(`module github\.com/([^/]+)/([^/]+)/cli`)
+	// Parse "module github.com/org/repo/..." (e.g., /cli or /cluster-bootstrap-cli)
+	re := regexp.MustCompile(`module github\.com/([^/]+)/([^/]+)/`)
 	matches := re.FindStringSubmatch(string(content))
-	if len(matches) != 3 {
+	if len(matches) < 3 {
 		return "", "", fmt.Errorf("could not parse module path from go.mod")
 	}
 
 	return matches[1], matches[2], nil
+}
+
+func detectCurrentModuleSuffix(workspaceRoot string) (string, error) {
+	goModPath := filepath.Join(workspaceRoot, "cli", "go.mod")
+	content, err := os.ReadFile(goModPath) //#nosec G304 -- path is constructed from detected workspace root, not user input
+	if err != nil {
+		return "", err
+	}
+
+	// Parse "module github.com/org/repo/suffix" to extract the suffix
+	re := regexp.MustCompile(`module github\.com/[^/]+/[^/]+/(.+)`)
+	matches := re.FindStringSubmatch(string(content))
+	if len(matches) < 2 {
+		return "cli", nil // Default to "cli" for backward compatibility
+	}
+
+	return strings.TrimSpace(matches[1]), nil
 }
 
 func detectCurrentAppPath(workspaceRoot string) (string, error) {

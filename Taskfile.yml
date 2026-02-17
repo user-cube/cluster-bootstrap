@@ -11,6 +11,15 @@ tasks:
     cmds:
       - task: cli:build
 
+  install:
+    desc: Install the CLI globally as 'cluster-bootstrap-cli'
+    dir: cli
+    cmds:
+      - go install
+      - |
+        echo "✅ Installed as 'cluster-bootstrap-cli' in $(go env GOPATH)/bin"
+        echo "   Run: cluster-bootstrap-cli --help"
+
   test:
     desc: Run Go tests with coverage
     dir: cli

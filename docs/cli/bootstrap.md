@@ -1,13 +1,13 @@
 # bootstrap
 
 ```bash
-./cli/cluster-bootstrap bootstrap <environment>
+./cli/cluster-bootstrap-cli bootstrap <environment>
 ```
 
 Performs the full cluster bootstrap sequence.
 
 ```bash
-./cli/cluster-bootstrap bootstrap dev
+./cli/cluster-bootstrap-cli bootstrap dev
 ```
 
 ## What it does
@@ -64,19 +64,19 @@ This makes bootstrap safe to re-run after configuration changes, secret updates,
 
 ```bash
 # SOPS (default)
-./cli/cluster-bootstrap bootstrap dev
+./cli/cluster-bootstrap-cli bootstrap dev
 
 # git-crypt
-./cli/cluster-bootstrap bootstrap dev --encryption git-crypt
+./cli/cluster-bootstrap-cli bootstrap dev --encryption git-crypt
 
 # git-crypt with key stored in cluster + custom app path
-./cli/cluster-bootstrap bootstrap dev \
+./cli/cluster-bootstrap-cli bootstrap dev \
   --encryption git-crypt \
   --gitcrypt-key-file ./git-crypt-key \
   --app-path k8s/apps
 
 # Dry run to a file
-./cli/cluster-bootstrap bootstrap dev --dry-run --dry-run-output /tmp/bootstrap.json
+./cli/cluster-bootstrap-cli bootstrap dev --dry-run --dry-run-output /tmp/bootstrap.json
 
 # Repo content in a subdirectory
 # First, update apps/values.yaml to set repo.basePath: "k8s"
@@ -88,15 +88,15 @@ This makes bootstrap safe to re-run after configuration changes, secret updates,
 
 # Option 2: From inside subdirectory (auto-detected)
 cd k8s
-./cli/cluster-bootstrap bootstrap dev \
+./cli/cluster-bootstrap-cli bootstrap dev \
   --app-path apps \
   --wait-for-health -v
 
 # Wait for components to be ready (with 5-minute timeout)
-./cli/cluster-bootstrap bootstrap dev --wait-for-health --health-timeout 300
+./cli/cluster-bootstrap-cli bootstrap dev --wait-for-health --health-timeout 300
 
 # Wait for health with verbose output
-./cli/cluster-bootstrap bootstrap dev --wait-for-health -v
+./cli/cluster-bootstrap-cli bootstrap dev --wait-for-health -v
 ```
 
 ## Health Checks
@@ -141,22 +141,22 @@ The report includes:
 
 ```bash
 # Default summary report
-./cli/cluster-bootstrap bootstrap dev
+./cli/cluster-bootstrap-cli bootstrap dev
 
 # JSON report to stdout (for piping to jq, logging systems, etc.)
-./cli/cluster-bootstrap bootstrap dev --report-format json
+./cli/cluster-bootstrap-cli bootstrap dev --report-format json
 
 # Save JSON report to file for later analysis
-./cli/cluster-bootstrap bootstrap dev --report-output bootstrap-report.json
+./cli/cluster-bootstrap-cli bootstrap dev --report-output bootstrap-report.json
 
 # JSON to both stdout and file
-./cli/cluster-bootstrap bootstrap dev --report-format json --report-output bootstrap-report.json
+./cli/cluster-bootstrap-cli bootstrap dev --report-format json --report-output bootstrap-report.json
 
 # Suppress report output (show only progress messages)
-./cli/cluster-bootstrap bootstrap dev --report-format none
+./cli/cluster-bootstrap-cli bootstrap dev --report-format none
 
 # Full bootstrap with health checks and report
-./cli/cluster-bootstrap bootstrap dev --wait-for-health --report-output bootstrap-$(date +%Y%m%d-%H%M%S).json
+./cli/cluster-bootstrap-cli bootstrap dev --wait-for-health --report-output bootstrap-$(date +%Y%m%d-%H%M%S).json
 ```
 
 ### Sample Summary Report
