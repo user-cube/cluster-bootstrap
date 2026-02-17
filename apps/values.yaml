@@ -3,6 +3,9 @@ environment: dev
 repo:
   url: git@github.com:user-cube/cluster-bootstrap.git
   targetRevision: main
+  # basePath: Optional base path when the project is in a subfolder (e.g., "k8s")
+  # Leave empty or omit if the project is at the repository root
+  basePath: ""
 
 components:
   argocd:

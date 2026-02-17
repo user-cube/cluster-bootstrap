@@ -55,7 +55,7 @@ func init() {
 	bootstrapCmd.Flags().StringVar(&bootstrapAgeKey, "age-key-file", "", "path to age private key file for SOPS decryption")
 	bootstrapCmd.Flags().StringVar(&encryption, "encryption", "sops", "encryption backend (sops|git-crypt)")
 	bootstrapCmd.Flags().StringVar(&gitcryptKeyFile, "gitcrypt-key-file", "", "path to git-crypt symmetric key file (creates K8s secret)")
-	bootstrapCmd.Flags().StringVar(&appPath, "app-path", "apps", "path inside the Git repo for the App of Apps source")
+	bootstrapCmd.Flags().StringVar(&appPath, "app-path", "apps", "path to App of Apps (relative to current dir when in subfolder, or full repo path with --base-dir)")
 	bootstrapCmd.Flags().BoolVar(&waitForHealth, "wait-for-health", false, "wait for cluster components to be ready after bootstrap")
 	bootstrapCmd.Flags().IntVar(&healthTimeout, "health-timeout", 180, "timeout in seconds for health checks (default 180)")
 	bootstrapCmd.Flags().StringVar(&reportFormat, "report-format", "summary", "report format: summary, json, none")
@@ -74,11 +74,49 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 
 	logger := NewLogger(verbose)
 
+	// Detect if we're running from a subdirectory and adjust paths accordingly
+	var argoCDAppPath string
+	var subfolderPath string
+
+	if baseDir == "." {
+		// Check if we're in a subdirectory of a Git repository
+		detected, relPath := detectGitSubdirectory()
+		if detected && relPath != "" {
+			subfolderPath = relPath
+
+			// Handle different appPath scenarios:
+			// 1. appPath="apps" -> convert to "k8s/apps"
+			// 2. appPath="k8s/apps" (user specified full path) -> strip to "apps" for local validation, keep "k8s/apps" for ArgoCD
+			if strings.HasPrefix(appPath, relPath+"/") {
+				// User provided full path (e.g., "k8s/apps" while in k8s/)
+				// This is valid, keep it for ArgoCD
+				argoCDAppPath = appPath
+				if verbose {
+					fmt.Printf("  📁 Detected running from subdirectory: %s\n", relPath)
+					fmt.Printf("  📍 Using full path for ArgoCD: %s\n", argoCDAppPath)
+				}
+			} else {
+				// User provided relative path (e.g., "apps")
+				// Convert to full path for ArgoCD
+				argoCDAppPath = relPath + "/" + appPath
+				if verbose {
+					fmt.Printf("  📁 Detected running from subdirectory: %s\n", relPath)
+					fmt.Printf("  📍 Local path: %s -> ArgoCD path: %s\n", appPath, argoCDAppPath)
+				}
+			}
+		} else {
+			argoCDAppPath = appPath
+		}
+	} else {
+		// baseDir is explicitly set, use the original logic
+		argoCDAppPath = appPath
+	}
+
 	// Initialize bootstrap report
 	report := NewBootstrapReport(env)
 	report.Configuration = ConfigReport{
 		BaseDir:           baseDir,
-		AppPath:           appPath,
+		AppPath:           argoCDAppPath,
 		Encryption:        encryption,
 		SecretsFile:       secretsFile,
 		Kubeconfig:        kubeconfig,
@@ -132,7 +170,8 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 
 	// Validation
 	validationTimer := startStage("Validation")
-	if err := validateBootstrapInputs(env); err != nil {
+	localAppPath, err := validateBootstrapInputs(env, argoCDAppPath)
+	if err != nil {
 		bootstrapErr = fmt.Errorf("validation failed: %w", err)
 		report.AddStage(validationTimer.complete(false, err))
 		return bootstrapErr
@@ -143,7 +182,13 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	configStage := logger.Stage("Configuration")
 	configStage.Detail("Environment: %s", env)
 	configStage.Detail("Base directory: %s", baseDir)
-	configStage.Detail("App path: %s", appPath)
+	if subfolderPath != "" {
+		configStage.Detail("Subfolder context: %s", subfolderPath)
+	}
+	configStage.Detail("App path (ArgoCD): %s", argoCDAppPath)
+	if localAppPath != argoCDAppPath {
+		configStage.Detail("App path (local): %s", localAppPath)
+	}
 	configStage.Detail("Encryption: %s", encryption)
 	if kubeconfig != "" {
 		configStage.Detail("Kubeconfig: %s", kubeconfig)
@@ -163,7 +208,6 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	secretsTimer := startStage("Loading Secrets")
 	secretsStage := logger.Stage("Loading Secrets")
 	var envSecrets *config.EnvironmentSecrets
-	var err error
 
 	var secretsPath string
 	switch encryption {
@@ -227,7 +271,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	}
 
 	if dryRun {
-		bootstrapErr = printDryRun(envSecrets, env, appPath)
+		bootstrapErr = printDryRun(envSecrets, env, argoCDAppPath)
 		return bootstrapErr
 	}
 
@@ -348,7 +392,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	appTimer := startStage("Deploying App of Apps")
 	appStage := logger.Stage("Deploying App of Apps")
 	stepf("Applying App of Apps for environment: %s", env)
-	_, appCreated, err := client.ApplyAppOfApps(ctx, envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, env, appPath, false)
+	_, appCreated, err := client.ApplyAppOfApps(ctx, envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, env, argoCDAppPath, false)
 	if err != nil {
 		bootstrapErr = err
 		report.AddStage(appTimer.complete(false, err))
@@ -410,7 +454,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 		successf("Done! ArgoCD is installed and the app-of-apps root Application has been created.")
 		logger.PrintStageSummary()
-		printBootstrapSummary(env, secretsPath)
+		printBootstrapSummary(env, secretsPath, argoCDAppPath)
 		fmt.Println("    Access the ArgoCD UI:")
 		fmt.Println("      kubectl port-forward svc/argocd-server -n argocd 8080:443")
 		fmt.Println("    Get the initial admin password:")
@@ -516,35 +560,70 @@ func buildDryRunObjects(envSecrets *config.EnvironmentSecrets, env, appPath stri
 	return repoSecret, appOfApps
 }
 
-func validateBootstrapInputs(env string) error {
+func validateBootstrapInputs(env string, argoCDAppPath string) (localPath string, err error) {
 	if env == "" {
-		return fmt.Errorf("environment is required")
+		return "", fmt.Errorf("environment is required")
 	}
 
-	baseInfo, err := os.Stat(baseDir)
-	if err != nil {
-		return fmt.Errorf("base-dir %s is not accessible: %w", baseDir, err)
+	baseInfo, statErr := os.Stat(baseDir)
+	if statErr != nil {
+		return "", fmt.Errorf("base-dir %s is not accessible: %w", baseDir, statErr)
 	}
 	if !baseInfo.IsDir() {
-		return fmt.Errorf("base-dir %s is not a directory", baseDir)
+		return "", fmt.Errorf("base-dir %s is not a directory", baseDir)
 	}
 
-	if filepath.IsAbs(appPath) {
-		return fmt.Errorf("app-path must be relative to base-dir")
+	if filepath.IsAbs(argoCDAppPath) {
+		return "", fmt.Errorf("app-path must be relative")
 	}
-	appFullPath := filepath.Join(baseDir, appPath)
-	if _, err := os.Stat(appFullPath); err != nil {
-		if appPath == "apps" {
+
+	// Determine the local path to validate
+	// The argoCDAppPath is the full path from repository root (e.g., "k8s/apps")
+	// We need to determine what part to validate locally based on baseDir or current directory
+	localAppPath := argoCDAppPath
+
+	if baseDir == "." {
+		// Check if we're in a Git subdirectory
+		detected, relPath := detectGitSubdirectory()
+		if detected && relPath != "" && strings.HasPrefix(argoCDAppPath, relPath+"/") {
+			// We're in a subdirectory and argoCDAppPath includes that prefix
+			// Strip it for local validation
+			// Example: In k8s/, argoCDAppPath="k8s/apps" -> localAppPath="apps"
+			localAppPath = strings.TrimPrefix(argoCDAppPath, relPath+"/")
+		}
+	} else if baseDir != "." {
+		// When baseDir is set (e.g., "./k8s"), we need to strip the matching prefix from argoCDAppPath
+		// Example: baseDir="./k8s", argoCDAppPath="k8s/apps" -> localAppPath="apps"
+		cleanBase := filepath.Clean(baseDir)
+		baseComponents := strings.Split(cleanBase, string(filepath.Separator))
+		pathComponents := strings.Split(argoCDAppPath, "/")
+
+		// Find the last component of baseDir (e.g., "k8s" from "./k8s")
+		baseLastComponent := baseComponents[len(baseComponents)-1]
+
+		// If argoCDAppPath starts with the same component, strip it
+		if len(pathComponents) > 0 && pathComponents[0] == baseLastComponent {
+			// Strip the first component for local validation
+			localAppPath = strings.Join(pathComponents[1:], "/")
+			if localAppPath == "" {
+				localAppPath = "."
+			}
+		}
+	}
+
+	appFullPath := filepath.Join(baseDir, localAppPath)
+	if _, statErr := os.Stat(appFullPath); statErr != nil {
+		if argoCDAppPath == "apps" {
 			detected, detectErr := autoDetectAppPath(baseDir)
 			if detectErr != nil {
-				return fmt.Errorf("app-path %s does not exist under base-dir: %w", appPath, err)
+				return "", fmt.Errorf("app-path %s does not exist: %w\n  hint: use --app-path to specify the full path from repository root (e.g., 'k8s/apps')", argoCDAppPath, statErr)
 			}
-			appPath = detected
+			localAppPath = detected
 			if verbose {
-				fmt.Printf("  App path auto-detected: %s\n", appPath)
+				fmt.Printf("  App path auto-detected: %s\n", localAppPath)
 			}
 		} else {
-			return fmt.Errorf("app-path %s does not exist under base-dir: %w", appPath, err)
+			return "", fmt.Errorf("app-path %s does not exist: %w\n  hint: verify the path exists and try using --base-dir if working with subfolders", argoCDAppPath, statErr)
 		}
 	}
 
@@ -554,16 +633,16 @@ func validateBootstrapInputs(env string) error {
 		switch encryption {
 		case "sops":
 			if !isEnc {
-				return fmt.Errorf("secrets-file must end with .enc.yaml when encryption is sops")
+				return "", fmt.Errorf("secrets-file must end with .enc.yaml when encryption is sops")
 			}
 		case "git-crypt":
 			if !isYaml || isEnc {
-				return fmt.Errorf("secrets-file must end with .yaml (not .enc.yaml) when encryption is git-crypt")
+				return "", fmt.Errorf("secrets-file must end with .yaml (not .enc.yaml) when encryption is git-crypt")
 			}
 		}
 	}
 
-	return nil
+	return localAppPath, nil
 }
 
 func autoDetectAppPath(base string) (string, error) {
@@ -604,13 +683,13 @@ func autoDetectAppPath(base string) (string, error) {
 	return candidates[0], nil
 }
 
-func printBootstrapSummary(env, secretsPath string) {
+func printBootstrapSummary(env, secretsPath, displayAppPath string) {
 	fmt.Println("\nSummary:")
 	fmt.Printf("  Environment: %s\n", env)
 	if secretsPath != "" {
 		fmt.Printf("  Secrets file: %s\n", secretsPath)
 	}
-	fmt.Printf("  App path: %s\n", appPath)
+	fmt.Printf("  App path: %s\n", displayAppPath)
 	fmt.Printf("  Encryption: %s\n", encryption)
 	if skipArgoCDInstall {
 		fmt.Println("  ArgoCD install: skipped")
@@ -630,4 +709,45 @@ func validateSecretsFileExists(path string) error {
 		return fmt.Errorf("secrets file not found: %s", path)
 	}
 	return nil
+}
+
+// detectGitSubdirectory checks if we're running from a subdirectory of a Git repository
+// Returns (detected bool, relative path from repo root)
+func detectGitSubdirectory() (bool, string) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return false, ""
+	}
+
+	// Walk up the directory tree looking for .git
+	dir := cwd
+	for {
+		gitPath := filepath.Join(dir, ".git")
+		if _, err := os.Stat(gitPath); err == nil {
+			// Found .git directory - this is the repo root
+			if dir == cwd {
+				// We're at the repo root
+				return false, ""
+			}
+
+			// Calculate relative path from repo root to current directory
+			relPath, err := filepath.Rel(dir, cwd)
+			if err != nil {
+				return false, ""
+			}
+
+			// Normalize path separators to forward slashes (for consistency with Git paths)
+			relPath = filepath.ToSlash(relPath)
+
+			return true, relPath
+		}
+
+		// Move up one directory
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Reached filesystem root without finding .git
+			return false, ""
+		}
+		dir = parent
+	}
 }

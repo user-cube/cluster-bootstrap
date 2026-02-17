@@ -46,7 +46,10 @@ nav:
   - Guides:
       - Adding a Component: guides/adding-a-component.md
       - Secrets Management: guides/secrets-management.md
+      - Secret Backends: guides/secret-backends.md
+      - Subfolder Setup: guides/subfolder-setup.md
       - Environments: guides/environments.md
+      - Troubleshooting: guides/troubleshooting.md
   - CLI:
       - Overview: cli/index.md
       - bootstrap: cli/bootstrap.md
