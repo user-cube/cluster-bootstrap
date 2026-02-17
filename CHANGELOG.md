@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/user-cube/cluster-bootstrap/compare/v1.5.0...v1.5.1) (2026-02-17)
+
+
+### Bug Fixes
+
+* rename cli ([dbad296](https://github.com/user-cube/cluster-bootstrap/commit/dbad296c34562914e8c6edf7614cfd0730abcea3))
+
 # [1.5.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.4.1...v1.5.0) (2026-02-17)
 
 
