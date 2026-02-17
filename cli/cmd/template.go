@@ -325,15 +325,20 @@ func getWorkspaceRoot() (string, error) {
 
 	// If we're in cli/ directory, go up one level
 	if filepath.Base(cwd) == "cli" {
-		return filepath.Dir(cwd), nil
+		cwd = filepath.Dir(cwd)
 	}
 
-	// Check if we're already at workspace root (has apps/ and cli/ directories)
+	// Check if we're at workspace root (has apps/ and cli/ directories)
 	appsPath := filepath.Join(cwd, "apps")
 	cliPath := filepath.Join(cwd, "cli")
 	if _, err := os.Stat(appsPath); err == nil {
 		if _, err := os.Stat(cliPath); err == nil {
-			return cwd, nil
+			// Resolve symlinks for consistent path comparison (macOS /var -> /private/var)
+			resolvedPath, err := filepath.EvalSymlinks(cwd)
+			if err != nil {
+				return cwd, nil // fallback to unresolved path
+			}
+			return resolvedPath, nil
 		}
 	}
 

@@ -66,6 +66,12 @@ func init() {
 
 func runBootstrap(cmd *cobra.Command, args []string) error {
 	env := args[0]
+
+	// Validate report format
+	if reportFormat != "summary" && reportFormat != "json" && reportFormat != "none" {
+		return fmt.Errorf("invalid report format '%s': must be 'summary', 'json', or 'none'", reportFormat)
+	}
+
 	logger := NewLogger(verbose)
 
 	// Initialize bootstrap report
