@@ -15,6 +15,8 @@ const argoCDNamespace = "argocd"
 
 // ApplyAppOfApps creates or updates the App of Apps root Application CR.
 // Returns a boolean indicating if it was created (true) or updated (false) when not in dry-run mode.
+// NOTE: This function's signature was changed to return an additional boolean value, which is a
+// breaking API change. External callers must be updated to handle the extra return value.
 func (c *Client) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, dryRun bool) (string, bool, error) {
 	app := &unstructured.Unstructured{
 		Object: map[string]interface{}{

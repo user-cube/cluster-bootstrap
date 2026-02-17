@@ -268,8 +268,14 @@ func applyReplacement(workspaceRoot string, r replacement, dryRun bool) (int, er
 			continue
 		}
 
+		// Determine file permissions: preserve existing if possible, else default to 0644
+		perm := os.FileMode(0644)
+		if fi, err := os.Stat(filePath); err == nil {
+			perm = fi.Mode().Perm()
+		}
+
 		// Write back
-		if err := os.WriteFile(filePath, []byte(newContent), 0600); err != nil {
+		if err := os.WriteFile(filePath, []byte(newContent), perm); err != nil {
 			return changedCount, fmt.Errorf("failed to write %s: %w", relPath, err)
 		}
 

@@ -127,7 +127,7 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	info.Components = append(info.Components, esInfo)
 
 	// Check other common components
-	prometheusInfo := checkComponentInfo(ctx, clientset, "monitoring", "kube-prometheus-stack-operator", "Kube Prometheus Stack", false)
+	prometheusInfo := checkComponentInfo(ctx, clientset, "monitoring", "kube-prometheus-stack", "Kube Prometheus Stack", false)
 	info.Components = append(info.Components, prometheusInfo)
 
 	trivyInfo := checkComponentInfo(ctx, clientset, "trivy-system", "trivy-operator", "Trivy Operator", false)
