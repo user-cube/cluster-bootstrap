@@ -55,6 +55,23 @@ This will:
 
 > **💡 Idempotent by design**: The bootstrap command can be safely run multiple times. It automatically detects existing resources and updates them instead of failing. Perfect for configuration updates or GitOps workflows.
 
+#### Bootstrap Reports
+
+The bootstrap command generates comprehensive reports with timing metrics, resource operations, and health check results:
+
+```bash
+# Default: Human-readable summary report
+./cli/cluster-bootstrap bootstrap dev
+
+# JSON report for automation/metrics collection
+./cli/cluster-bootstrap bootstrap dev --report-format json
+
+# Save report to file
+./cli/cluster-bootstrap bootstrap dev --report-output bootstrap-report.json
+```
+
+See [Bootstrap Reports documentation](docs/cli/bootstrap.md#bootstrap-reports) for details.
+
 #### Using git-crypt instead of SOPS
 
 ```bash

@@ -30,6 +30,8 @@ var (
 	appPath           string
 	waitForHealth     bool
 	healthTimeout     int
+	reportFormat      string
+	reportOutput      string
 )
 
 var bootstrapCmd = &cobra.Command{
@@ -56,6 +58,8 @@ func init() {
 	bootstrapCmd.Flags().StringVar(&appPath, "app-path", "apps", "path inside the Git repo for the App of Apps source")
 	bootstrapCmd.Flags().BoolVar(&waitForHealth, "wait-for-health", false, "wait for cluster components to be ready after bootstrap")
 	bootstrapCmd.Flags().IntVar(&healthTimeout, "health-timeout", 180, "timeout in seconds for health checks (default 180)")
+	bootstrapCmd.Flags().StringVar(&reportFormat, "report-format", "summary", "report format: summary, json, none")
+	bootstrapCmd.Flags().StringVar(&reportOutput, "report-output", "", "write JSON report to file")
 
 	rootCmd.AddCommand(bootstrapCmd)
 }
@@ -64,16 +68,69 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	env := args[0]
 	logger := NewLogger(verbose)
 
-	// Run preflight checks
-	// Only require kubectl if we're going to use wait-for-health
-	if err := PreflightChecks(encryption, bootstrapAgeKey, verbose, waitForHealth); err != nil {
-		return err
+	// Initialize bootstrap report
+	report := NewBootstrapReport(env)
+	report.Configuration = ConfigReport{
+		BaseDir:           baseDir,
+		AppPath:           appPath,
+		Encryption:        encryption,
+		SecretsFile:       secretsFile,
+		Kubeconfig:        kubeconfig,
+		Context:           kubeContext,
+		DryRun:            dryRun,
+		SkipArgoCDInstall: skipArgoCDInstall,
+		WaitForHealth:     waitForHealth,
 	}
 
-	stepf("Bootstrapping cluster for environment: %s", env)
-	if err := validateBootstrapInputs(env); err != nil {
-		return fmt.Errorf("validation failed: %w", err)
+	// Defer finalizing the report
+	var bootstrapErr error
+	defer func() {
+		report.Complete(bootstrapErr == nil, bootstrapErr)
+
+		// Generate and display report
+		if reportFormat != "none" && !dryRun {
+			if reportFormat == "json" {
+				jsonReport, err := report.ToJSON()
+				if err != nil {
+					warnf("Failed to generate JSON report: %v", err)
+				} else {
+					fmt.Println(jsonReport)
+				}
+			} else if reportFormat == "summary" {
+				report.PrintSummary()
+			}
+		}
+
+		// Write report to file if requested
+		if reportOutput != "" && !dryRun {
+			if err := report.WriteToFile(reportOutput); err != nil {
+				warnf("Failed to write report to %s: %v", reportOutput, err)
+			} else if reportFormat != "json" {
+				fmt.Printf("\n📄 Report saved to: %s\n", reportOutput)
+			}
+		}
+	}()
+
+	// Run preflight checks
+	// Only require kubectl if we're going to use wait-for-health
+	preflightTimer := startStage("Preflight Checks")
+	if err := PreflightChecks(encryption, bootstrapAgeKey, verbose, waitForHealth); err != nil {
+		bootstrapErr = err
+		report.AddStage(preflightTimer.complete(false, err))
+		return err
 	}
+	report.AddStage(preflightTimer.complete(true, nil))
+
+	stepf("Bootstrapping cluster for environment: %s", env)
+
+	// Validation
+	validationTimer := startStage("Validation")
+	if err := validateBootstrapInputs(env); err != nil {
+		bootstrapErr = fmt.Errorf("validation failed: %w", err)
+		report.AddStage(validationTimer.complete(false, err))
+		return bootstrapErr
+	}
+	report.AddStage(validationTimer.complete(true, nil))
 
 	// Log configuration
 	configStage := logger.Stage("Configuration")
@@ -96,6 +153,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	configStage.Done()
 
 	// Load secrets based on encryption backend
+	secretsTimer := startStage("Loading Secrets")
 	secretsStage := logger.Stage("Loading Secrets")
 	var envSecrets *config.EnvironmentSecrets
 	var err error
@@ -108,13 +166,18 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 			sf = filepath.Join(baseDir, config.SecretsFileNamePlain(env))
 		}
 		secretsPath = sf
+		report.Configuration.SecretsFile = secretsPath
 		if err := validateSecretsFileExists(secretsPath); err != nil {
+			bootstrapErr = err
+			report.AddStage(secretsTimer.complete(false, err))
 			return err
 		}
 		secretsStage.Detail("Loading plaintext secrets from %s", sf)
 		stepf("Loading plaintext secrets from %s...", sf)
 		envSecrets, err = config.LoadSecretsPlaintext(sf)
 		if err != nil {
+			bootstrapErr = err
+			report.AddStage(secretsTimer.complete(false, err))
 			return err
 		}
 		secretsStage.Detail("✓ Secrets loaded successfully")
@@ -124,7 +187,10 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 			sf = filepath.Join(baseDir, config.SecretsFileName(env))
 		}
 		secretsPath = sf
+		report.Configuration.SecretsFile = secretsPath
 		if err := validateSecretsFileExists(secretsPath); err != nil {
+			bootstrapErr = err
+			report.AddStage(secretsTimer.complete(false, err))
 			return err
 		}
 		secretsStage.Detail("Decrypting secrets from %s", sf)
@@ -132,16 +198,21 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		sopsOpts := &sops.Options{AgeKeyFile: bootstrapAgeKey}
 		envSecrets, err = config.LoadSecrets(sf, sopsOpts)
 		if err != nil {
+			bootstrapErr = err
+			report.AddStage(secretsTimer.complete(false, err))
 			return err
 		}
 		secretsStage.Detail("✓ Secrets decrypted successfully")
 	default:
-		return fmt.Errorf("unsupported encryption backend: %s (use sops or git-crypt)", encryption)
+		bootstrapErr = fmt.Errorf("unsupported encryption backend: %s (use sops or git-crypt)", encryption)
+		report.AddStage(secretsTimer.complete(false, bootstrapErr))
+		return bootstrapErr
 	}
 
 	secretsStage.Detail("Repository: %s", envSecrets.Repo.URL)
 	secretsStage.Detail("Target revision: %s", envSecrets.Repo.TargetRevision)
 	secretsStage.Done()
+	report.AddStage(secretsTimer.complete(true, nil))
 
 	if verbose {
 		fmt.Printf("  Repo URL: %s\n", envSecrets.Repo.URL)
@@ -149,33 +220,52 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	}
 
 	if dryRun {
-		return printDryRun(envSecrets, env, appPath)
+		bootstrapErr = printDryRun(envSecrets, env, appPath)
+		return bootstrapErr
 	}
 
 	// Create k8s client
+	k8sTimer := startStage("K8s Client Connection")
 	k8sStage := logger.Stage("Kubernetes Client")
 	client, err := k8s.NewClient(kubeconfig, kubeContext)
 	if err != nil {
+		bootstrapErr = err
+		report.AddStage(k8sTimer.complete(false, err))
 		return err
 	}
 	k8sStage.Detail("✓ Connected to cluster")
 	k8sStage.Done()
+	report.AddStage(k8sTimer.complete(true, nil))
 
 	ctx := context.Background()
 
 	// Create Kubernetes secrets (before Helm install, as the chart may reference them)
+	secretsK8sTimer := startStage("Creating K8s Resources")
 	secretsK8sStage := logger.Stage("Creating K8s Secrets")
 	stepf("Creating Kubernetes secrets...")
 	if err := client.EnsureNamespace(ctx, "argocd"); err != nil {
+		bootstrapErr = err
+		report.AddStage(secretsK8sTimer.complete(false, err))
 		return err
 	}
 	secretsK8sStage.Detail("✓ Created/verified namespace 'argocd'")
+	report.Resources.Namespace = NamespaceReport{
+		Name:    "argocd",
+		Created: true, // Always report as created for simplicity (EnsureNamespace is idempotent)
+	}
 
-	_, created, err := client.CreateRepoSSHSecret(ctx, envSecrets.Repo.URL, envSecrets.Repo.SSHPrivateKey, false)
+	_, repoSecretCreated, err := client.CreateRepoSSHSecret(ctx, envSecrets.Repo.URL, envSecrets.Repo.SSHPrivateKey, false)
 	if err != nil {
+		bootstrapErr = err
+		report.AddStage(secretsK8sTimer.complete(false, err))
 		return err
 	}
-	if created {
+	report.Resources.Secrets = append(report.Resources.Secrets, SecretReport{
+		Name:      "repo-ssh-key",
+		Namespace: "argocd",
+		Created:   repoSecretCreated,
+	})
+	if repoSecretCreated {
 		secretsK8sStage.SecretDetail("Created", "repo-ssh-key", "argocd")
 	} else {
 		secretsK8sStage.SecretDetail("Updated", "repo-ssh-key", "argocd")
@@ -185,28 +275,47 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	if gitcryptKeyFile != "" {
 		keyData, err := os.ReadFile(gitcryptKeyFile) // #nosec G304
 		if err != nil {
-			return fmt.Errorf("failed to read git-crypt key file: %w", err)
+			bootstrapErr = fmt.Errorf("failed to read git-crypt key file: %w", err)
+			report.AddStage(secretsK8sTimer.complete(false, bootstrapErr))
+			return bootstrapErr
 		}
 		stepf("Creating git-crypt-key secret...")
-		created, err := client.CreateGitCryptKeySecret(ctx, keyData)
+		gitCryptSecretCreated, err := client.CreateGitCryptKeySecret(ctx, keyData)
 		if err != nil {
+			bootstrapErr = err
+			report.AddStage(secretsK8sTimer.complete(false, err))
 			return err
 		}
-		if created {
+		report.Resources.Secrets = append(report.Resources.Secrets, SecretReport{
+			Name:      "git-crypt-key",
+			Namespace: "argocd",
+			Created:   gitCryptSecretCreated,
+		})
+		if gitCryptSecretCreated {
 			secretsK8sStage.SecretDetail("Created", "git-crypt-key", "argocd")
 		} else {
 			secretsK8sStage.SecretDetail("Updated", "git-crypt-key", "argocd")
 		}
 	}
 	secretsK8sStage.Done()
+	report.AddStage(secretsK8sTimer.complete(true, nil))
 
 	// Install ArgoCD via Helm
 	if !skipArgoCDInstall {
+		helmTimer := startStage("Installing ArgoCD")
 		helmStage := logger.Stage("Installing ArgoCD via Helm")
 		stepf("Installing ArgoCD via Helm...")
 		installed, err := helm.InstallArgoCD(ctx, kubeconfig, kubeContext, env, baseDir, verbose)
 		if err != nil {
-			return fmt.Errorf("failed to install ArgoCD: %w", err)
+			bootstrapErr = fmt.Errorf("failed to install ArgoCD: %w", err)
+			report.AddStage(helmTimer.complete(false, bootstrapErr))
+			return bootstrapErr
+		}
+		report.Resources.ArgoCDRelease = HelmReleaseReport{
+			Name:      "argocd",
+			Namespace: "argocd",
+			Installed: installed,
+			Skipped:   false,
 		}
 		if installed {
 			helmStage.Detail("✓ ArgoCD installed successfully")
@@ -214,48 +323,87 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 			helmStage.Detail("✓ ArgoCD upgraded successfully")
 		}
 		helmStage.Done()
+		report.AddStage(helmTimer.complete(true, nil))
+	} else {
+		report.Resources.ArgoCDRelease = HelmReleaseReport{
+			Name:      "argocd",
+			Namespace: "argocd",
+			Skipped:   true,
+		}
 	}
 
 	// Apply App of Apps
+	appTimer := startStage("Deploying App of Apps")
 	appStage := logger.Stage("Deploying App of Apps")
 	stepf("Applying App of Apps for environment: %s", env)
-	_, created, err = client.ApplyAppOfApps(ctx, envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, env, appPath, false)
+	_, appCreated, err := client.ApplyAppOfApps(ctx, envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, env, appPath, false)
 	if err != nil {
+		bootstrapErr = err
+		report.AddStage(appTimer.complete(false, err))
 		return err
 	}
-	if created {
+	report.Resources.AppOfApps = ApplicationReport{
+		Name:      "app-of-apps",
+		Namespace: "argocd",
+		Created:   appCreated,
+	}
+	if appCreated {
 		appStage.Detail("✓ App of Apps created successfully")
 	} else {
 		appStage.Detail("✓ App of Apps updated successfully")
 	}
 	appStage.Detail("ArgoCD will automatically sync enabled components")
 	appStage.Done()
+	report.AddStage(appTimer.complete(true, nil))
 
 	// Wait for health checks if requested
 	if waitForHealth {
+		healthTimer := startStage("Health Checks")
 		fmt.Println()
 		stepf("Waiting for cluster components to be ready...")
 		healthStatus, err := WaitForHealth(ctx, kubeconfig, kubeContext, env, healthTimeout)
+
+		// Populate health report
+		report.Health = &HealthReport{
+			Checked: true,
+			Timeout: healthTimeout,
+		}
+
 		if err != nil {
 			warnf("Health check failed: %v", err)
+			report.Health.Healthy = false
+			report.AddStage(healthTimer.complete(false, err))
 			// Don't fail bootstrap if health checks don't complete, just warn
 		} else {
 			PrintHealthStatus(healthStatus)
+			report.Health.Healthy = healthStatus.Healthy
+
+			// Convert health status results to component health
+			for _, result := range healthStatus.Results {
+				report.Health.Components = append(report.Health.Components, ComponentHealth{
+					Name:   result.Component,
+					Status: result.Status,
+				})
+			}
+
 			if !healthStatus.Healthy {
 				warnf("Some components are not ready yet. Bootstrap completed, but you may want to wait a bit longer for everything to be ready.")
 			}
+			report.AddStage(healthTimer.complete(healthStatus.Healthy, nil))
 		}
 	}
 
-	// Print access instructions
-	fmt.Println()
-	successf("Done! ArgoCD is installed and the app-of-apps root Application has been created.")
-	logger.PrintStageSummary()
-	printBootstrapSummary(env, secretsPath)
-	fmt.Println("    Access the ArgoCD UI:")
-	fmt.Println("      kubectl port-forward svc/argocd-server -n argocd 8080:443")
-	fmt.Println("    Get the initial admin password:")
-	fmt.Println("      kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d")
+	// Print access instructions (only if not using JSON report format)
+	if reportFormat != "json" {
+		fmt.Println()
+		successf("Done! ArgoCD is installed and the app-of-apps root Application has been created.")
+		logger.PrintStageSummary()
+		printBootstrapSummary(env, secretsPath)
+		fmt.Println("    Access the ArgoCD UI:")
+		fmt.Println("      kubectl port-forward svc/argocd-server -n argocd 8080:443")
+		fmt.Println("    Get the initial admin password:")
+		fmt.Println("      kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d")
+	}
 
 	return nil
 }
