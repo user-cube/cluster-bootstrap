@@ -188,14 +188,14 @@ func runCustomize(cmd *cobra.Command, args []string) error {
 		if verbose {
 			fmt.Printf("🔄 Processing: %s\n", r.name)
 		}
-		count, changedInReplacement, err := applyReplacement(workspaceRoot, r, dryRunFlag)
+		count, err := applyReplacement(workspaceRoot, r, dryRunFlag)
 		if err != nil {
 			fmt.Printf("❌ Failed: %v\n", err)
 			return err
 		}
 		if count > 0 {
 			fmt.Printf("   ✓ Updated %d file(s)\n", count)
-			for _, f := range changedInReplacement {
+			for _, f := range r.files {
 				changedFiles[f]++
 			}
 		} else if verbose {
@@ -339,15 +339,23 @@ func detectCurrentValues(workspaceRoot string) (org, repo string, err error) {
 }
 
 func detectCurrentAppPath(workspaceRoot string) (string, error) {
-	// Derive the app path based on the repository name detected from go.mod.
-	// The repository templates component paths as "components/<name>", so we
-	// use the repo name as the component name.
-	_, repo, err := detectCurrentValues(workspaceRoot)
+	// Read the current app path from apps/values.yaml
+	valuesPath := filepath.Join(workspaceRoot, "apps", "values.yaml")
+	content, err := os.ReadFile(valuesPath) //#nosec G304 -- path is constructed from workspace root, not user input
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read apps/values.yaml: %w", err)
 	}
 
-	return filepath.Join("components", repo), nil
+	// Parse the path value using regex to handle YAML structure variations
+	// Matches: path: <value> (with optional indentation)
+	re := regexp.MustCompile(`^\s*path:\s*(.+)$`)
+	for _, line := range strings.Split(string(content), "\n") {
+		if matches := re.FindStringSubmatch(line); matches != nil {
+			return strings.TrimSpace(matches[1]), nil
+		}
+	}
+
+	return "", fmt.Errorf("path field not found in apps/values.yaml")
 }
 
 func getWorkspaceRoot() (string, error) {

@@ -99,7 +99,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 			case "json":
 				jsonReport, err := report.ToJSON()
 				if err != nil {
-					warnf("Failed to generate JSON report: %v", err)
+					fmt.Fprintf(os.Stderr, "Failed to generate JSON report: %v\n", err)
 				} else {
 					fmt.Println(jsonReport)
 				}

@@ -11,9 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 // InfoResult holds bootstrap status information
@@ -82,17 +79,6 @@ func runInfo(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
-	// Create Kubernetes client
-	config, err := buildClientConfig(infoKubeconfig, infoContext)
-	if err != nil {
-		return fmt.Errorf("failed to build kubeconfig: %w", err)
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return fmt.Errorf("failed to connect to cluster: %w", err)
-	}
-
 	// Create k8s client with dynamic client for CRDs
 	k8sClient, err := k8s.NewClient(infoKubeconfig, infoContext)
 	if err != nil {
@@ -109,28 +95,28 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	}
 
 	// Get cluster version
-	if version, err := clientset.Discovery().ServerVersion(); err == nil {
+	if version, err := k8sClient.Clientset.Discovery().ServerVersion(); err == nil {
 		info.ClusterVersion = version.GitVersion
 	}
 
 	// Check ArgoCD
-	argoCDInfo := checkArgoCDInfo(ctx, clientset)
+	argoCDInfo := checkArgoCDInfo(ctx, k8sClient.Clientset)
 	info.Components = append(info.Components, argoCDInfo)
 	info.ArgoCDVersion = argoCDInfo.Version
 
 	// Check Vault
-	vaultInfo := checkComponentInfo(ctx, clientset, "vault", "vault", "Vault", true)
+	vaultInfo := checkComponentInfo(ctx, k8sClient.Clientset, "vault", "vault", "Vault", true)
 	info.Components = append(info.Components, vaultInfo)
 
 	// Check External Secrets
-	esInfo := checkComponentInfo(ctx, clientset, "external-secrets", "external-secrets", "External Secrets", false)
+	esInfo := checkComponentInfo(ctx, k8sClient.Clientset, "external-secrets", "external-secrets", "External Secrets", false)
 	info.Components = append(info.Components, esInfo)
 
 	// Check other common components
-	prometheusInfo := checkComponentInfo(ctx, clientset, "monitoring", "kube-prometheus-stack", "Kube Prometheus Stack", false)
+	prometheusInfo := checkComponentInfo(ctx, k8sClient.Clientset, "monitoring", "kube-prometheus-stack", "Kube Prometheus Stack", false)
 	info.Components = append(info.Components, prometheusInfo)
 
-	trivyInfo := checkComponentInfo(ctx, clientset, "trivy-system", "trivy-operator", "Trivy Operator", false)
+	trivyInfo := checkComponentInfo(ctx, k8sClient.Clientset, "trivy-system", "trivy-operator", "Trivy Operator", false)
 	info.Components = append(info.Components, trivyInfo)
 
 	// Get ArgoCD Applications
@@ -353,45 +339,6 @@ func printInfoResults(info *InfoResult) {
 	fmt.Println("  • Check component logs: kubectl logs -n <namespace> -l app=<name>")
 	fmt.Println("  • Verify ArgoCD sync: kubectl -n argocd get applications")
 	fmt.Println("  • View cluster events: kubectl get events -A --sort-by='.lastTimestamp'")
-}
-
-// buildClientConfig creates a REST config from kubeconfig and context
-func buildClientConfig(kubeconfig, context string) (*rest.Config, error) {
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	if kubeconfig != "" {
-		loadingRules.ExplicitPath = kubeconfig
-	}
-
-	configOverrides := &clientcmd.ConfigOverrides{}
-	if context != "" {
-		configOverrides.CurrentContext = context
-	}
-
-	clientConfig := clientcmd.NewNonInteractiveClientConfig(
-		*getMergedConfig(loadingRules),
-		context,
-		configOverrides,
-		loadingRules,
-	)
-
-	return clientConfig.ClientConfig()
-}
-
-// getMergedConfig loads and merges kubeconfig files
-func getMergedConfig(loadingRules *clientcmd.ClientConfigLoadingRules) *clientcmdapi.Config {
-	if loadingRules.ExplicitPath != "" {
-		// Try to load explicit kubeconfig
-		cfg, err := clientcmd.LoadFromFile(loadingRules.ExplicitPath)
-		if err == nil {
-			return cfg
-		}
-	}
-	// Fall back to default
-	cfg, _ := clientcmd.LoadFromFile(clientcmd.RecommendedHomeFile)
-	if cfg != nil {
-		return cfg
-	}
-	return clientcmdapi.NewConfig()
 }
 
 // getArgoCDApplications retrieves all ArgoCD Applications from the cluster

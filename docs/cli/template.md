@@ -15,7 +15,6 @@ This command replaces template placeholders throughout the codebase:
 - **Repository URLs**: Updates Git repository URLs in `apps/values.yaml` and component values files
 - **GitHub references**: Updates GitHub badges, links, and GitHub Pages URLs in documentation
 - **Go module paths**: Updates the module path in `go.mod` and all import statements in Go files
-- **App paths**: Customizes the App of Apps path configuration
 
 ## Flags
 
@@ -23,7 +22,7 @@ This command replaces template placeholders throughout the codebase:
 |------|---------|-------------|
 | `--org` | — | GitHub organization or user name (required) |
 | `--repo` | — | Repository name (required) |
-| `--app-path` | `apps` | App of Apps path inside the repository |
+| `--app-path` | `apps` | App of Apps path (runtime default, not stored in config) |
 | `--dry-run` | `false` | Preview changes without modifying files |
 | `--force` | `false` | Skip confirmation prompt |
 
@@ -88,8 +87,7 @@ The command modifies the following files:
 - `cli/go.mod` - Go module path
 - All `.go` files in `cli/` - Import statements
 
-### Configuration
-- `apps/values.yaml` - App of Apps path configuration
+> **Note**: The `--app-path` flag is used at runtime by the `bootstrap` command and is not stored in repository configuration files.
 
 ## Workflow
 
