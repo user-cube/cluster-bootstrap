@@ -65,7 +65,7 @@ func TestCreateRepoSSHSecret_Idempotent(t *testing.T) {
 		// Verify the secret was updated
 		updated, err := fakeClient.CoreV1().Secrets("argocd").Get(ctx, "repo-ssh-key", metav1.GetOptions{})
 		require.NoError(t, err)
-		assert.Equal(t, repoURL, updated.StringData["url"])
+		assert.Equal(t, repoURL, string(updated.Data["url"]))
 	})
 }
 
