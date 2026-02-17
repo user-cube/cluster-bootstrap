@@ -28,19 +28,29 @@ Online documentation available at [Cluster Boostrap Docs](https://user-cube.gith
 
 ## Quick Start
 
-### 1. Build the CLI
+### 1. Customize the template (first time only)
+
+Replace the default `user-cube/cluster-bootstrap` with your organization and repository:
+
+```bash
+./cli/cluster-bootstrap template customize --org mycompany --repo k8s-gitops
+```
+
+This updates Git URLs, GitHub badges, Go module paths, and documentation throughout the codebase. See [Template documentation](docs/cli/template.md) for details.
+
+### 2. Build the CLI
 
 ```bash
 task build
 ```
 
-### 2. Initialize secrets (first time only)
+### 3. Initialize secrets
 
 ```bash
 ./cli/cluster-bootstrap init
 ```
 
-### 3. Bootstrap the cluster
+### 4. Bootstrap the cluster
 
 ```bash
 ./cli/cluster-bootstrap bootstrap dev
@@ -134,6 +144,7 @@ The `apps/` chart uses a **single dynamic template** that iterates over a `compo
 | Command | Description |
 |---------|-------------|
 | `bootstrap <env>` | Full cluster bootstrap (decrypt secrets, install ArgoCD, deploy App of Apps). Generates comprehensive reports with timing metrics and resource operations. Fully idempotent. |
+| `template customize` | Customize the template with your organization and repository (replaces placeholders in configs, docs, and code) |
 | `doctor` | Run prerequisite checks for tooling and cluster access |
 | `status <env>` | Show cluster status and component information |
 | `validate <env>` | Validate local config, secrets, and optional cluster access |

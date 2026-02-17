@@ -50,6 +50,7 @@ nav:
   - CLI:
       - Overview: cli/index.md
       - bootstrap: cli/bootstrap.md
+      - template: cli/template.md
       - doctor: cli/doctor.md
       - status: cli/status.md
       - validate: cli/validate.md

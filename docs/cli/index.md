@@ -35,6 +35,7 @@ These flags are available on all commands:
 | Command | Description |
 |---------|-------------|
 | [`bootstrap`](bootstrap.md) | Full cluster bootstrap sequence |
+| [`template`](template.md) | Customize the template with your organization and repository |
 | [`doctor`](doctor.md) | Check local tools and cluster access |
 | [`status`](status.md) | Show cluster status and component information |
 | [`validate`](validate.md) | Validate local config and secrets |
