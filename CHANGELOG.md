@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/user-cube/cluster-bootstrap/compare/v1.4.0...v1.4.1) (2026-02-17)
+
+
+### Bug Fixes
+
+* support subpaths ([#33](https://github.com/user-cube/cluster-bootstrap/issues/33)) ([a0d6a38](https://github.com/user-cube/cluster-bootstrap/commit/a0d6a3832a751d8e18e4a65004c220330283ec33))
+
 # [1.4.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.3.1...v1.4.0) (2026-02-17)
 
 
