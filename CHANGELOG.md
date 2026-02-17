@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.5.2...v1.6.0) (2026-02-17)
+
+
+### Features
+
+* Version command; Ldflags ([#35](https://github.com/user-cube/cluster-bootstrap/issues/35)) ([c0a308a](https://github.com/user-cube/cluster-bootstrap/commit/c0a308a52a960c9e6153a668d972961d7082ca69))
+
 ## [1.5.2](https://github.com/user-cube/cluster-bootstrap/compare/v1.5.1...v1.5.2) (2026-02-17)
 
 
