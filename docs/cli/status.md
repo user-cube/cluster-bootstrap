@@ -11,7 +11,8 @@ Shows cluster status and component information. This is an alias of the `info` c
 1. Connects to the cluster using the provided kubeconfig/context
 2. Reports cluster version and core component readiness
 3. Lists component versions and replica counts
-4. Optionally runs health checks
+4. Auto-discovers and reports ArgoCD Applications (sync/health status)
+5. Optionally runs health checks
 
 ## Flags
 

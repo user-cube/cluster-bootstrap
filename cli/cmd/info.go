@@ -6,7 +6,10 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/user-cube/cluster-bootstrap/cli/internal/k8s"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -19,8 +22,21 @@ type InfoResult struct {
 	ClusterVersion string
 	ArgoCDVersion  string
 	Components     []ComponentInfo
+	Applications   []ArgoCDAppInfo
 	Health         *HealthStatus
 	Timestamp      time.Time
+}
+
+// ArgoCDAppInfo holds ArgoCD Application information
+type ArgoCDAppInfo struct {
+	Name         string
+	Namespace    string
+	SyncStatus   string
+	HealthStatus string
+	Destination  string
+	RepoURL      string
+	Path         string
+	SyncWave     string
 }
 
 // ComponentInfo holds information about a component
@@ -77,6 +93,12 @@ func runInfo(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to connect to cluster: %w", err)
 	}
 
+	// Create k8s client with dynamic client for CRDs
+	k8sClient, err := k8s.NewClient(infoKubeconfig, infoContext)
+	if err != nil {
+		return fmt.Errorf("failed to create k8s client: %w", err)
+	}
+
 	// Gather bootstrap info
 	stepf("Gathering bootstrap information for environment: %s", env)
 
@@ -105,11 +127,18 @@ func runInfo(cmd *cobra.Command, args []string) error {
 	info.Components = append(info.Components, esInfo)
 
 	// Check other common components
-	prometheusInfo := checkComponentInfo(ctx, clientset, "monitoring", "kube-prometheus-stack", "Kube Prometheus Stack", false)
+	prometheusInfo := checkComponentInfo(ctx, clientset, "monitoring", "kube-prometheus-stack-operator", "Kube Prometheus Stack", false)
 	info.Components = append(info.Components, prometheusInfo)
 
 	trivyInfo := checkComponentInfo(ctx, clientset, "trivy-system", "trivy-operator", "Trivy Operator", false)
 	info.Components = append(info.Components, trivyInfo)
+
+	// Get ArgoCD Applications
+	if apps, err := getArgoCDApplications(ctx, k8sClient); err == nil {
+		info.Applications = apps
+	} else if verbose {
+		warnf("Failed to list ArgoCD Applications: %v", err)
+	}
 
 	// Optional health check
 	if infoWaitHealth {
@@ -278,6 +307,41 @@ func printInfoResults(info *InfoResult) {
 		}
 	}
 
+	if len(info.Applications) > 0 {
+		fmt.Println()
+		fmt.Println("ArgoCD Applications:")
+		for _, app := range info.Applications {
+			syncIcon := "○"
+			if app.SyncStatus == "Synced" {
+				syncIcon = "✓"
+			} else if app.SyncStatus == "OutOfSync" {
+				syncIcon = "✗"
+			} else if app.SyncStatus != "" {
+				syncIcon = "↻"
+			}
+
+			healthIcon := "○"
+			switch app.HealthStatus {
+			case "Healthy":
+				healthIcon = "✓"
+			case "Degraded", "Missing":
+				healthIcon = "✗"
+			case "Progressing":
+				healthIcon = "↻"
+			case "Suspended":
+				healthIcon = "⏸"
+			}
+
+			fmt.Printf("  %s %s %-20s [Sync: %-10s Health: %-10s]\n", syncIcon, healthIcon, app.Name, app.SyncStatus, app.HealthStatus)
+			if app.Destination != "" {
+				fmt.Printf("     Destination: %s\n", app.Destination)
+			}
+			if app.Path != "" {
+				fmt.Printf("     Path: %s\n", app.Path)
+			}
+		}
+	}
+
 	if info.Health != nil {
 		fmt.Println()
 		PrintHealthStatus(info.Health)
@@ -328,4 +392,74 @@ func getMergedConfig(loadingRules *clientcmd.ClientConfigLoadingRules) *clientcm
 		return cfg
 	}
 	return clientcmdapi.NewConfig()
+}
+
+// getArgoCDApplications retrieves all ArgoCD Applications from the cluster
+func getArgoCDApplications(ctx context.Context, client *k8s.Client) ([]ArgoCDAppInfo, error) {
+	gvr := schema.GroupVersionResource{
+		Group:    "argoproj.io",
+		Version:  "v1alpha1",
+		Resource: "applications",
+	}
+
+	list, err := client.DynamicClient.Resource(gvr).Namespace("argocd").List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list applications: %w", err)
+	}
+
+	apps := make([]ArgoCDAppInfo, 0, len(list.Items))
+	for _, item := range list.Items {
+		app := parseArgoCDApplication(&item)
+		apps = append(apps, app)
+	}
+
+	return apps, nil
+}
+
+// parseArgoCDApplication extracts relevant info from an ArgoCD Application unstructured object
+func parseArgoCDApplication(obj *unstructured.Unstructured) ArgoCDAppInfo {
+	app := ArgoCDAppInfo{
+		Name:      obj.GetName(),
+		Namespace: obj.GetNamespace(),
+	}
+
+	// Extract sync status
+	if status, found, _ := unstructured.NestedMap(obj.Object, "status"); found {
+		if sync, ok := status["sync"].(map[string]interface{}); ok {
+			if syncStatus, ok := sync["status"].(string); ok {
+				app.SyncStatus = syncStatus
+			}
+		}
+		if health, ok := status["health"].(map[string]interface{}); ok {
+			if healthStatus, ok := health["status"].(string); ok {
+				app.HealthStatus = healthStatus
+			}
+		}
+	}
+
+	// Extract spec info
+	if spec, found, _ := unstructured.NestedMap(obj.Object, "spec"); found {
+		if destination, ok := spec["destination"].(map[string]interface{}); ok {
+			if namespace, ok := destination["namespace"].(string); ok {
+				app.Destination = namespace
+			}
+		}
+		if source, ok := spec["source"].(map[string]interface{}); ok {
+			if repoURL, ok := source["repoURL"].(string); ok {
+				app.RepoURL = repoURL
+			}
+			if path, ok := source["path"].(string); ok {
+				app.Path = path
+			}
+		}
+	}
+
+	// Extract sync wave annotation
+	if annotations := obj.GetAnnotations(); annotations != nil {
+		if wave, ok := annotations["argocd.argoproj.io/sync-wave"]; ok {
+			app.SyncWave = wave
+		}
+	}
+
+	return app
 }
