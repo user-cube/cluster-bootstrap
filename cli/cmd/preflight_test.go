@@ -66,7 +66,9 @@ func TestCheckFilePermissions_Readable(t *testing.T) {
 	// Create a temporary file with proper permissions
 	tmpFile, err := os.CreateTemp("", "test-perm-*.txt")
 	require.NoError(t, err)
-	defer os.Remove(tmpFile.Name())
+	defer func() {
+		_ = os.Remove(tmpFile.Name())
+	}()
 
 	// Set permissions to 600 for a secret file
 	require.NoError(t, os.Chmod(tmpFile.Name(), 0o600))
@@ -80,7 +82,9 @@ func TestCheckFilePermissions_TooPermissive(t *testing.T) {
 	// Create a temporary file with overly permissive permissions
 	tmpFile, err := os.CreateTemp("", "test-perm-*.txt")
 	require.NoError(t, err)
-	defer os.Remove(tmpFile.Name())
+	defer func() {
+		_ = os.Remove(tmpFile.Name())
+	}()
 
 	// Set permissions to 644 (too permissive for a secret)
 	require.NoError(t, os.Chmod(tmpFile.Name(), 0o644))
@@ -95,7 +99,9 @@ func TestCheckFilePermissions_NonSecret(t *testing.T) {
 	// Create a temporary file
 	tmpFile, err := os.CreateTemp("", "test-perm-*.txt")
 	require.NoError(t, err)
-	defer os.Remove(tmpFile.Name())
+	defer func() {
+		_ = os.Remove(tmpFile.Name())
+	}()
 
 	// Set permissions to 644 (acceptable for non-secret)
 	require.NoError(t, os.Chmod(tmpFile.Name(), 0o644))

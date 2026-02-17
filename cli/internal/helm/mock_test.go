@@ -70,10 +70,10 @@ func TestMockHelmAction_CallCount(t *testing.T) {
 
 	assert.Equal(t, 0, mock.GetCallCount())
 
-	mock.SimulateInstall(ctx)
+	_ = mock.SimulateInstall(ctx)
 	assert.Equal(t, 1, mock.GetCallCount())
 
-	mock.SimulateInstall(ctx)
+	_ = mock.SimulateInstall(ctx)
 	assert.Equal(t, 2, mock.GetCallCount())
 }
 

@@ -32,7 +32,7 @@ func (m *MockHelmAction) SimulateInstall(ctx context.Context) error {
 	if m.SimulateTimeout {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("Helm install timed out: context deadline exceeded")
+			return fmt.Errorf("helm install timed out: context deadline exceeded")
 		case <-time.After(500 * time.Millisecond):
 			break
 		}
@@ -61,7 +61,7 @@ func (m *MockHelmAction) SimulateUpgrade(ctx context.Context) error {
 	if m.SimulateTimeout {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("Helm upgrade timed out: context deadline exceeded")
+			return fmt.Errorf("helm upgrade timed out: context deadline exceeded")
 		case <-time.After(500 * time.Millisecond):
 			break
 		}

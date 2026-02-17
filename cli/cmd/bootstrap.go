@@ -424,15 +424,6 @@ func autoDetectAppPath(base string) (string, error) {
 	return candidates[0], nil
 }
 
-func printYAMLish(obj interface{}) {
-	data, err := json.MarshalIndent(obj, "", "  ")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to marshal: %v\n", err)
-		return
-	}
-	fmt.Println(string(data))
-}
-
 func printBootstrapSummary(env, secretsPath string) {
 	fmt.Println("\nSummary:")
 	fmt.Printf("  Environment: %s\n", env)

@@ -31,6 +31,7 @@ func TestExtractVersionFromImage(t *testing.T) {
 }
 
 func TestCheckArgoCDInfo_NotInstalled(t *testing.T) {
+	//nolint:staticcheck
 	clientset := fake.NewSimpleClientset()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -44,6 +45,7 @@ func TestCheckArgoCDInfo_NotInstalled(t *testing.T) {
 }
 
 func TestCheckArgoCDInfo_Ready(t *testing.T) {
+	//nolint:staticcheck
 	clientset := fake.NewSimpleClientset(
 		&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{Name: "argocd"},
@@ -87,6 +89,7 @@ func TestCheckArgoCDInfo_Ready(t *testing.T) {
 }
 
 func TestCheckArgoCDInfo_Progressing(t *testing.T) {
+	//nolint:staticcheck
 	clientset := fake.NewSimpleClientset(
 		&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{Name: "argocd"},
@@ -127,6 +130,7 @@ func TestCheckArgoCDInfo_Progressing(t *testing.T) {
 }
 
 func TestCheckComponentInfo_Deployment_Ready(t *testing.T) {
+	//nolint:staticcheck
 	clientset := fake.NewSimpleClientset(
 		&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{Name: "external-secrets"},
@@ -168,6 +172,7 @@ func TestCheckComponentInfo_Deployment_Ready(t *testing.T) {
 }
 
 func TestCheckComponentInfo_StatefulSet_Ready(t *testing.T) {
+	//nolint:staticcheck
 	clientset := fake.NewSimpleClientset(
 		&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{Name: "vault"},
@@ -209,6 +214,7 @@ func TestCheckComponentInfo_StatefulSet_Ready(t *testing.T) {
 }
 
 func TestCheckComponentInfo_NotInstalled(t *testing.T) {
+	//nolint:staticcheck
 	clientset := fake.NewSimpleClientset()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -221,6 +227,7 @@ func TestCheckComponentInfo_NotInstalled(t *testing.T) {
 }
 
 func TestCheckComponentInfo_Pending(t *testing.T) {
+	//nolint:staticcheck
 	clientset := fake.NewSimpleClientset(
 		&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{Name: "monitoring"},

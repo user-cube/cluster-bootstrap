@@ -13,6 +13,7 @@ import (
 )
 
 func TestWaitForHealth_ArgoCDReady(t *testing.T) {
+	//nolint:staticcheck
 	clientset := fake.NewSimpleClientset(
 		// Create argocd namespace
 		&corev1.Namespace{
@@ -45,6 +46,7 @@ func TestWaitForHealth_ArgoCDReady(t *testing.T) {
 }
 
 func TestWaitForHealth_ArgoCDTimeout(t *testing.T) {
+	//nolint:staticcheck
 	clientset := fake.NewSimpleClientset(
 		// Create argocd namespace
 		&corev1.Namespace{
@@ -77,6 +79,7 @@ func TestWaitForHealth_ArgoCDTimeout(t *testing.T) {
 }
 
 func TestWaitForHealth_VaultReady(t *testing.T) {
+	//nolint:staticcheck
 	clientset := fake.NewSimpleClientset(
 		// Create vault namespace
 		&corev1.Namespace{
@@ -109,6 +112,7 @@ func TestWaitForHealth_VaultReady(t *testing.T) {
 }
 
 func TestWaitForHealth_VaultNotInstalled(t *testing.T) {
+	//nolint:staticcheck
 	clientset := fake.NewSimpleClientset()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -121,6 +125,7 @@ func TestWaitForHealth_VaultNotInstalled(t *testing.T) {
 }
 
 func TestWaitForHealth_ExternalSecretsReady(t *testing.T) {
+	//nolint:staticcheck
 	clientset := fake.NewSimpleClientset(
 		// Create external-secrets namespace
 		&corev1.Namespace{
@@ -153,6 +158,7 @@ func TestWaitForHealth_ExternalSecretsReady(t *testing.T) {
 }
 
 func TestWaitForHealth_ExternalSecretsNotInstalled(t *testing.T) {
+	//nolint:staticcheck
 	clientset := fake.NewSimpleClientset()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
