@@ -339,21 +339,15 @@ func detectCurrentValues(workspaceRoot string) (org, repo string, err error) {
 }
 
 func detectCurrentAppPath(workspaceRoot string) (string, error) {
-	valuesPath := filepath.Join(workspaceRoot, "apps", "values.yaml")
-	content, err := os.ReadFile(valuesPath) //#nosec G304 -- path is constructed from detected workspace root, not user input
+	// Derive the app path based on the repository name detected from go.mod.
+	// The repository templates component paths as "components/<name>", so we
+	// use the repo name as the component name.
+	_, repo, err := detectCurrentValues(workspaceRoot)
 	if err != nil {
 		return "", err
 	}
 
-	// Parse "path: <value>" from values.yaml
-	// Look for source.path or just path: in the file
-	re := regexp.MustCompile(`(?m)^\s*path:\s+(\S+)`)
-	matches := re.FindStringSubmatch(string(content))
-	if len(matches) != 2 {
-		return "", fmt.Errorf("could not parse path from apps/values.yaml")
-	}
-
-	return matches[1], nil
+	return filepath.Join("components", repo), nil
 }
 
 func getWorkspaceRoot() (string, error) {
