@@ -1,4 +1,4 @@
-provider: vault
+backend: vault
 
 vault:
   address: http://vault.vault.svc:8200
