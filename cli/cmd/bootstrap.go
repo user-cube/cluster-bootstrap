@@ -178,7 +178,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 
 	// If git-crypt key file provided, store it as a K8s secret
 	if gitcryptKeyFile != "" {
-		keyData, err := os.ReadFile(gitcryptKeyFile) //nolint:gosec // user-provided file path from flag/config
+		keyData, err := os.ReadFile(gitcryptKeyFile) //nolint:gosec // safe: path comes from validated flag
 		if err != nil {
 			return fmt.Errorf("failed to read git-crypt key file: %w", err)
 		}
@@ -284,8 +284,8 @@ func buildDryRunObjects(envSecrets *config.EnvironmentSecrets, env, appPath stri
 		"metadata": map[string]interface{}{
 			"name":      "repo-ssh-key",
 			"namespace": "argocd",
-			"labels": map[string]string{ //nolint:gosec // these are Kubernetes labels, not credentials
-				"argocd.argoproj.io/secret-type": "repo-creds",
+			"labels": map[string]string{
+				"argocd.argoproj.io/secret-type": "repo-creds", //nolint:gosec // safe: Kubernetes labels are not credentials
 			},
 			"annotations": map[string]string{
 				"managed-by":                   "argocd.argoproj.io",

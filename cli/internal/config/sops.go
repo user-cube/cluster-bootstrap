@@ -22,7 +22,7 @@ type CreationRule struct {
 
 // ReadSopsConfig reads and parses an existing .sops.yaml file.
 func ReadSopsConfig(path string) (*SOPSConfig, error) {
-	data, err := os.ReadFile(path) //nolint:gosec // user-provided file path from flag/config
+	data, err := os.ReadFile(path) //nolint:gosec // safe: user-provided secrets file from flag
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", path, err)
 	}
