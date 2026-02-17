@@ -59,8 +59,8 @@ func init() {
 	customizeCmd.Flags().StringVar(&appPathFlag, "app-path", defaultAppPath, "App of Apps path inside the repository")
 	customizeCmd.Flags().BoolVar(&dryRunFlag, "dry-run", false, "Show what would be changed without modifying files")
 	customizeCmd.Flags().BoolVar(&forceFlag, "force", false, "Skip confirmation prompt")
-	customizeCmd.MarkFlagRequired("org")
-	customizeCmd.MarkFlagRequired("repo")
+	_ = customizeCmd.MarkFlagRequired("org")  //#nosec G104 -- error only occurs if flag doesn't exist, which is impossible here
+	_ = customizeCmd.MarkFlagRequired("repo") //#nosec G104 -- error only occurs if flag doesn't exist, which is impossible here
 
 	templateCmd.AddCommand(customizeCmd)
 	rootCmd.AddCommand(templateCmd)
@@ -247,7 +247,7 @@ func applyReplacement(workspaceRoot string, r replacement, dryRun bool) (int, er
 		}
 
 		// Read file
-		content, err := os.ReadFile(filePath)
+		content, err := os.ReadFile(filePath) //#nosec G304 -- filePath is from predefined list in replacements struct, not user input
 		if err != nil {
 			return changedCount, fmt.Errorf("failed to read %s: %w", relPath, err)
 		}
@@ -269,7 +269,7 @@ func applyReplacement(workspaceRoot string, r replacement, dryRun bool) (int, er
 		}
 
 		// Write back
-		if err := os.WriteFile(filePath, []byte(newContent), 0644); err != nil {
+		if err := os.WriteFile(filePath, []byte(newContent), 0600); err != nil {
 			return changedCount, fmt.Errorf("failed to write %s: %w", relPath, err)
 		}
 
@@ -301,7 +301,7 @@ func validateInputs() error {
 
 func detectCurrentValues(workspaceRoot string) (org, repo string, err error) {
 	goModPath := filepath.Join(workspaceRoot, "cli", "go.mod")
-	content, err := os.ReadFile(goModPath)
+	content, err := os.ReadFile(goModPath) //#nosec G304 -- path is constructed from detected workspace root, not user input
 	if err != nil {
 		return "", "", err
 	}
@@ -344,7 +344,7 @@ func listGoFiles(workspaceRoot string) []string {
 	var goFiles []string
 
 	cliRoot := filepath.Join(workspaceRoot, "cli")
-	filepath.Walk(cliRoot, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(cliRoot, func(path string, info os.FileInfo, err error) error { //#nosec G104 -- walk error is intentionally ignored to collect as many files as possible
 		if err != nil {
 			return nil
 		}

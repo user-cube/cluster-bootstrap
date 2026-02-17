@@ -20,6 +20,7 @@ func TestCreateRepoSSHSecret_Idempotent(t *testing.T) {
 	sshKey := "test-ssh-private-key"
 
 	t.Run("creates new secret", func(t *testing.T) {
+		//nolint:staticcheck // SA1019: fake.NewSimpleClientset is deprecated but alternative requires generated apply configs
 		fakeClient := fake.NewSimpleClientset()
 		client := &Client{Clientset: fakeClient}
 
@@ -50,6 +51,7 @@ func TestCreateRepoSSHSecret_Idempotent(t *testing.T) {
 			},
 		}
 
+		//nolint:staticcheck // SA1019: fake.NewSimpleClientset is deprecated but alternative requires generated apply configs
 		fakeClient := fake.NewSimpleClientset(&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{Name: "argocd"},
 		}, existingSecret)
@@ -73,6 +75,7 @@ func TestCreateGitCryptKeySecret_Idempotent(t *testing.T) {
 	keyData := []byte("test-git-crypt-key-data")
 
 	t.Run("creates new secret", func(t *testing.T) {
+		//nolint:staticcheck // SA1019: fake.NewSimpleClientset is deprecated but alternative requires generated apply configs
 		fakeClient := fake.NewSimpleClientset(&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{Name: "argocd"},
 		})
@@ -99,6 +102,7 @@ func TestCreateGitCryptKeySecret_Idempotent(t *testing.T) {
 			},
 		}
 
+		//nolint:staticcheck // SA1019: fake.NewSimpleClientset is deprecated but alternative requires generated apply configs
 		fakeClient := fake.NewSimpleClientset(&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{Name: "argocd"},
 		}, existingSecret)
@@ -120,6 +124,7 @@ func TestEnsureNamespace_Idempotent(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("creates new namespace", func(t *testing.T) {
+		//nolint:staticcheck // SA1019: fake.NewSimpleClientset is deprecated but alternative requires generated apply configs
 		fakeClient := fake.NewSimpleClientset()
 		client := &Client{Clientset: fakeClient}
 
@@ -135,6 +140,7 @@ func TestEnsureNamespace_Idempotent(t *testing.T) {
 		existingNS := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{Name: "argocd"},
 		}
+		//nolint:staticcheck // SA1019: fake.NewSimpleClientset is deprecated but alternative requires generated apply configs
 		fakeClient := fake.NewSimpleClientset(existingNS)
 		client := &Client{Clientset: fakeClient}
 
@@ -146,6 +152,7 @@ func TestEnsureNamespace_Idempotent(t *testing.T) {
 // TestCreateRepoSSHSecret_DryRun verifies dry-run mode doesn't modify cluster state
 func TestCreateRepoSSHSecret_DryRun(t *testing.T) {
 	ctx := context.Background()
+	//nolint:staticcheck // SA1019: fake.NewSimpleClientset is deprecated but alternative requires generated apply configs
 	fakeClient := fake.NewSimpleClientset(&corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{Name: "argocd"},
 	})
@@ -169,6 +176,7 @@ func TestBootstrapIdempotence_Integration(t *testing.T) {
 	sshKey := "test-key"
 	gitCryptKey := []byte("git-crypt-symmetric-key")
 
+	//nolint:staticcheck // SA1019: fake.NewSimpleClientset is deprecated but alternative requires generated apply configs
 	fakeClient := fake.NewSimpleClientset()
 	client := &Client{Clientset: fakeClient}
 

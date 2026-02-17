@@ -89,14 +89,15 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 
 		// Generate and display report
 		if reportFormat != "none" && !dryRun {
-			if reportFormat == "json" {
+			switch reportFormat {
+			case "json":
 				jsonReport, err := report.ToJSON()
 				if err != nil {
 					warnf("Failed to generate JSON report: %v", err)
 				} else {
 					fmt.Println(jsonReport)
 				}
-			} else if reportFormat == "summary" {
+			case "summary":
 				report.PrintSummary()
 			}
 		}

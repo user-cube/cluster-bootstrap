@@ -310,9 +310,9 @@ func validateSSHRepoAccess(secrets *config.EnvironmentSecrets) validateResult {
 		return validateResult{name: "ssh repo access", err: fmt.Errorf("failed to create temp ssh key: %w", err)}
 	}
 	defer func() {
-		_ = os.Remove(keyFile.Name())
+		_ = os.Remove(keyFile.Name()) //#nosec G703 -- keyFile.Name() is from os.CreateTemp, not user input
 	}()
-	if err := os.WriteFile(keyFile.Name(), []byte(key), 0600); err != nil {
+	if err := os.WriteFile(keyFile.Name(), []byte(key), 0600); err != nil { //#nosec G703 -- keyFile.Name() is from os.CreateTemp, not user input
 		return validateResult{name: "ssh repo access", err: fmt.Errorf("failed to write temp ssh key: %w", err)}
 	}
 

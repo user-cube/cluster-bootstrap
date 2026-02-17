@@ -141,7 +141,7 @@ func (r *BootstrapReport) WriteToFile(path string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, []byte(jsonData), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(jsonData), 0600); err != nil {
 		return fmt.Errorf("failed to write report to %s: %w", path, err)
 	}
 	return nil

@@ -272,7 +272,7 @@ func TestGetWorkspaceRoot_FromCli(t *testing.T) {
 
 	// Change to cli directory
 	originalDir, _ := os.Getwd()
-	defer os.Chdir(originalDir)
+	defer func() { _ = os.Chdir(originalDir) }()
 	err = os.Chdir(cliDir)
 	require.NoError(t, err)
 
@@ -298,7 +298,7 @@ func TestGetWorkspaceRoot_FromRoot(t *testing.T) {
 
 	// Change to workspace root
 	originalDir, _ := os.Getwd()
-	defer os.Chdir(originalDir)
+	defer func() { _ = os.Chdir(originalDir) }()
 	err = os.Chdir(tmpDir)
 	require.NoError(t, err)
 
@@ -317,7 +317,7 @@ func TestGetWorkspaceRoot_Invalid(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	originalDir, _ := os.Getwd()
-	defer os.Chdir(originalDir)
+	defer func() { _ = os.Chdir(originalDir) }()
 	err := os.Chdir(tmpDir)
 	require.NoError(t, err)
 
