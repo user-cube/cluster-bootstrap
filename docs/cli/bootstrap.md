@@ -21,6 +21,26 @@ Performs the full cluster bootstrap sequence.
 7. Optionally waits for cluster components to be ready (if `--wait-for-health` provided)
 8. Prints ArgoCD access instructions
 
+## Idempotent Behavior
+
+The bootstrap command is **fully idempotent** and can be safely run multiple times without causing errors or conflicts:
+
+- **Namespace**: Verified and created only if it doesn't exist
+- **Secrets**: Automatically updated if they already exist, created otherwise
+- **ArgoCD Helm Release**: Upgraded if already installed, installed otherwise
+- **App of Apps Application**: Updated with latest configuration if it exists, created otherwise
+
+When running the command multiple times, you'll see clear feedback indicating whether each resource was **Created** or **Updated**:
+
+```
+✓ Created/verified namespace 'argocd'
+  Created secret repo-ssh-key in argocd
+  ✓ ArgoCD upgraded successfully
+  ✓ App of Apps updated successfully
+```
+
+This makes bootstrap safe to re-run after configuration changes, secret updates, or as part of GitOps workflows.
+
 ## Flags
 
 | Flag | Default | Description |

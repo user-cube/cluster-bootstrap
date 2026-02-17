@@ -74,7 +74,8 @@ func loadChartConfig(baseDir, dependencyName string) (name, version, repoURL str
 // It loads values from components/argocd/values/base.yaml and values/<env>.yaml,
 // then runs helm upgrade --install with --wait.
 // Returns helpful error messages for common failure scenarios.
-func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir string, verbose bool) error {
+// Returns a boolean indicating if it was installed (true) or upgraded (false).
+func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir string, verbose bool) (bool, error) {
 	settings := cli.New()
 	settings.SetNamespace(argoCDNamespace)
 	if kubeconfig != "" {
@@ -92,31 +93,31 @@ func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir st
 
 	restClientGetter := newRESTClientGetter(kubeconfig, kubeContext, argoCDNamespace)
 	if err := actionConfig.Init(restClientGetter, argoCDNamespace, "secret", logFunc); err != nil {
-		return fmt.Errorf("failed to init helm action config: %w", err)
+		return false, fmt.Errorf("failed to init helm action config: %w", err)
 	}
 
 	// Read chart name, version and repo from components/argocd/Chart.yaml
 	chartName, chartVersion, repoURL, err := loadChartConfig(baseDir, argoCDChartDep)
 	if err != nil {
-		return fmt.Errorf("failed to load chart config: %w\n  hint: ensure components/argocd/Chart.yaml exists and has the argo-cd dependency defined", err)
+		return false, fmt.Errorf("failed to load chart config: %w\n  hint: ensure components/argocd/Chart.yaml exists and has the argo-cd dependency defined", err)
 	}
 
 	// Download the chart
 	chartPath, err := fetchChart(settings, chartName, chartVersion, repoURL, verbose)
 	if err != nil {
-		return fmt.Errorf("%w\n  hint: verify the Helm repository is accessible and the chart version exists\n  tip: try: helm repo add argo https://argoproj.github.io/argo-helm && helm repo update", err)
+		return false, fmt.Errorf("%w\n  hint: verify the Helm repository is accessible and the chart version exists\n  tip: try: helm repo add argo https://argoproj.github.io/argo-helm && helm repo update", err)
 	}
 
 	// Load the chart
 	chart, err := loader.Load(chartPath)
 	if err != nil {
-		return fmt.Errorf("failed to load chart: %w\n  hint: verify the downloaded chart is not corrupted", err)
+		return false, fmt.Errorf("failed to load chart: %w\n  hint: verify the downloaded chart is not corrupted", err)
 	}
 
 	// Load and merge values
 	vals, err := loadValues(baseDir, env)
 	if err != nil {
-		return fmt.Errorf("failed to load values: %w", err)
+		return false, fmt.Errorf("failed to load values: %w", err)
 	}
 
 	if verbose {
@@ -148,12 +149,12 @@ func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir st
 			} else if strings.Contains(errMsg, "imagePull") || strings.Contains(errMsg, "ErrImagePull") {
 				hint = "image pull failed. Verify container images are accessible and image pull secrets are configured"
 			}
-			return fmt.Errorf("failed to install ArgoCD: %w\n  hint: %s", err, hint)
+			return false, fmt.Errorf("failed to install ArgoCD: %w\n  hint: %s", err, hint)
 		}
 		if verbose {
 			fmt.Printf("  Release %s installed, status: %s\n", rel.Name, rel.Info.Status)
 		}
-		return nil
+		return true, nil
 	}
 
 	upgrade := action.NewUpgrade(actionConfig)
@@ -170,14 +171,14 @@ func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir st
 		} else if strings.Contains(errMsg, "permission denied") || strings.Contains(errMsg, "Forbidden") {
 			hint = "permission denied. Verify your cluster role permissions to upgrade resources in the argocd namespace"
 		}
-		return fmt.Errorf("failed to upgrade ArgoCD: %w\n  hint: %s", err, hint)
+		return false, fmt.Errorf("failed to upgrade ArgoCD: %w\n  hint: %s", err, hint)
 	}
 
 	if verbose {
 		fmt.Printf("  Release %s upgraded, status: %s\n", rel.Name, rel.Info.Status)
 	}
 
-	return nil
+	return false, nil
 }
 
 // fetchChart downloads the given chart from a Helm repository.

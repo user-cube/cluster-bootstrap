@@ -53,6 +53,8 @@ This will:
 3. Install ArgoCD via Helm
 4. Deploy the root **App of Apps** Application
 
+> **💡 Idempotent by design**: The bootstrap command can be safely run multiple times. It automatically detects existing resources and updates them instead of failing. Perfect for configuration updates or GitOps workflows.
+
 #### Using git-crypt instead of SOPS
 
 ```bash

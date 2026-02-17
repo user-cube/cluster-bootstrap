@@ -171,10 +171,15 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	}
 	secretsK8sStage.Detail("✓ Created/verified namespace 'argocd'")
 
-	if _, err := client.CreateRepoSSHSecret(ctx, envSecrets.Repo.URL, envSecrets.Repo.SSHPrivateKey, false); err != nil {
+	_, created, err := client.CreateRepoSSHSecret(ctx, envSecrets.Repo.URL, envSecrets.Repo.SSHPrivateKey, false)
+	if err != nil {
 		return err
 	}
-	secretsK8sStage.SecretDetail("Created", "repo-ssh-key", "argocd")
+	if created {
+		secretsK8sStage.SecretDetail("Created", "repo-ssh-key", "argocd")
+	} else {
+		secretsK8sStage.SecretDetail("Updated", "repo-ssh-key", "argocd")
+	}
 
 	// If git-crypt key file provided, store it as a K8s secret
 	if gitcryptKeyFile != "" {
@@ -183,10 +188,15 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed to read git-crypt key file: %w", err)
 		}
 		stepf("Creating git-crypt-key secret...")
-		if err := client.CreateGitCryptKeySecret(ctx, keyData); err != nil {
+		created, err := client.CreateGitCryptKeySecret(ctx, keyData)
+		if err != nil {
 			return err
 		}
-		secretsK8sStage.SecretDetail("Created", "git-crypt-key", "argocd")
+		if created {
+			secretsK8sStage.SecretDetail("Created", "git-crypt-key", "argocd")
+		} else {
+			secretsK8sStage.SecretDetail("Updated", "git-crypt-key", "argocd")
+		}
 	}
 	secretsK8sStage.Done()
 
@@ -194,20 +204,30 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	if !skipArgoCDInstall {
 		helmStage := logger.Stage("Installing ArgoCD via Helm")
 		stepf("Installing ArgoCD via Helm...")
-		if err := helm.InstallArgoCD(ctx, kubeconfig, kubeContext, env, baseDir, verbose); err != nil {
+		installed, err := helm.InstallArgoCD(ctx, kubeconfig, kubeContext, env, baseDir, verbose)
+		if err != nil {
 			return fmt.Errorf("failed to install ArgoCD: %w", err)
 		}
-		helmStage.Detail("✓ ArgoCD installed successfully")
+		if installed {
+			helmStage.Detail("✓ ArgoCD installed successfully")
+		} else {
+			helmStage.Detail("✓ ArgoCD upgraded successfully")
+		}
 		helmStage.Done()
 	}
 
 	// Apply App of Apps
 	appStage := logger.Stage("Deploying App of Apps")
 	stepf("Applying App of Apps for environment: %s", env)
-	if _, err := client.ApplyAppOfApps(ctx, envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, env, appPath, false); err != nil {
+	_, created, err = client.ApplyAppOfApps(ctx, envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, env, appPath, false)
+	if err != nil {
 		return err
 	}
-	appStage.Detail("✓ App of Apps created successfully")
+	if created {
+		appStage.Detail("✓ App of Apps created successfully")
+	} else {
+		appStage.Detail("✓ App of Apps updated successfully")
+	}
 	appStage.Detail("ArgoCD will automatically sync enabled components")
 	appStage.Done()
 
