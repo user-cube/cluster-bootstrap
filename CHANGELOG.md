@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/user-cube/cluster-bootstrap/compare/v1.3.0...v1.3.1) (2026-02-17)
+
+
+### Bug Fixes
+
+* **deps:** update module golang.org/x/term to v0.40.0 ([#28](https://github.com/user-cube/cluster-bootstrap/issues/28)) ([358e1a8](https://github.com/user-cube/cluster-bootstrap/commit/358e1a89f683aa65c88ac85952c2671847c87c0e))
+
 # [1.3.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.2.1...v1.3.0) (2026-02-17)
 
 
