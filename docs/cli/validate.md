@@ -14,6 +14,10 @@ Validates local configuration, secrets, and optional cluster access. This is a d
 4. Validates encryption tooling
 5. Reads and validates secrets files
 6. Checks `.sops.yaml` rules or `.gitattributes` patterns
+7. Verifies repo reachability (git ls-remote)
+8. Optionally checks SSH key access to the repo
+9. Optionally runs Helm lint on the App of Apps chart
+10. Optionally checks ArgoCD CRDs
 
 ## Flags
 
@@ -26,6 +30,12 @@ Validates local configuration, secrets, and optional cluster access. This is a d
 | `--kubeconfig` | `~/.kube/config` | Path to kubeconfig file |
 | `--context` | current context | Kubeconfig context to use |
 | `--skip-cluster-check` | `false` | Skip cluster access checks |
+| `--skip-repo-check` | `false` | Skip repo reachability checks |
+| `--skip-ssh-check` | `false` | Skip SSH key repo access checks |
+| `--skip-helm-lint` | `false` | Skip Helm lint checks |
+| `--skip-crd-check` | `false` | Skip ArgoCD CRD checks |
+| `--repo-timeout` | `10` | Timeout in seconds for repo checks |
+| `--helm-timeout` | `20` | Timeout in seconds for helm lint checks |
 
 ## Examples
 
@@ -38,6 +48,9 @@ Validates local configuration, secrets, and optional cluster access. This is a d
 
 # Skip cluster checks
 ./cli/cluster-bootstrap validate dev --skip-cluster-check
+
+# Skip repo checks
+./cli/cluster-bootstrap validate dev --skip-repo-check
 
 # Use a specific kubeconfig and context
 ./cli/cluster-bootstrap validate dev --kubeconfig ~/.kube/my-config --context my-cluster

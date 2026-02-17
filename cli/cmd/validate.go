@@ -1,14 +1,18 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/user-cube/cluster-bootstrap/cli/internal/config"
+	"github.com/user-cube/cluster-bootstrap/cli/internal/k8s"
 	"github.com/user-cube/cluster-bootstrap/cli/internal/sops"
 )
 
@@ -27,6 +31,12 @@ var (
 	validateKubeconfig       string
 	validateContext          string
 	validateSkipClusterCheck bool
+	validateSkipRepoCheck    bool
+	validateSkipSSHCheck     bool
+	validateSkipHelmLint     bool
+	validateSkipCRDCheck     bool
+	validateRepoTimeout      int
+	validateHelmTimeout      int
 )
 
 var validateCmd = &cobra.Command{
@@ -48,6 +58,12 @@ func init() {
 	validateCmd.Flags().StringVar(&validateKubeconfig, "kubeconfig", "", "path to kubeconfig file")
 	validateCmd.Flags().StringVar(&validateContext, "context", "", "kubeconfig context to use")
 	validateCmd.Flags().BoolVar(&validateSkipClusterCheck, "skip-cluster-check", false, "skip kubectl cluster access checks")
+	validateCmd.Flags().BoolVar(&validateSkipRepoCheck, "skip-repo-check", false, "skip repo reachability checks")
+	validateCmd.Flags().BoolVar(&validateSkipSSHCheck, "skip-ssh-check", false, "skip SSH key repo access checks")
+	validateCmd.Flags().BoolVar(&validateSkipHelmLint, "skip-helm-lint", false, "skip Helm lint checks")
+	validateCmd.Flags().BoolVar(&validateSkipCRDCheck, "skip-crd-check", false, "skip ArgoCD CRD checks")
+	validateCmd.Flags().IntVar(&validateRepoTimeout, "repo-timeout", 10, "timeout in seconds for repo checks")
+	validateCmd.Flags().IntVar(&validateHelmTimeout, "helm-timeout", 20, "timeout in seconds for helm lint checks")
 
 	rootCmd.AddCommand(validateCmd)
 }
@@ -62,6 +78,7 @@ func runValidate(cmd *cobra.Command, args []string) error {
 	}
 
 	results := make([]validateResult, 0, 12)
+	var secretsData *config.EnvironmentSecrets
 
 	results = append(results, runValidateCheck(stage, "base directory", func() (string, error) {
 		info, err := os.Stat(baseDir)
@@ -151,6 +168,7 @@ func runValidate(cmd *cobra.Command, args []string) error {
 		if strings.TrimSpace(secrets.Repo.SSHPrivateKey) == "" {
 			return "", fmt.Errorf("repo.sshPrivateKey is required in secrets file")
 		}
+		secretsData = secrets
 		return "repo credentials validated", nil
 	}))
 
@@ -158,6 +176,10 @@ func runValidate(cmd *cobra.Command, args []string) error {
 
 	results = append(results, validateSopsConfig(env))
 	results = append(results, validateGitCryptAttributes())
+	results = append(results, validateRepoAccess(secretsData))
+	results = append(results, validateSSHRepoAccess(secretsData))
+	results = append(results, validateHelmLint(env, resolvedAppPath, appErr))
+	results = append(results, validateArgoCDCRDs())
 
 	stage.Done()
 
@@ -194,6 +216,9 @@ func validateSopsConfig(env string) validateResult {
 	}
 
 	sopsPath := filepath.Join(baseDir, ".sops.yaml")
+	if envPath, ok := os.LookupEnv("SOPS_CONFIG"); ok && strings.TrimSpace(envPath) != "" {
+		sopsPath = envPath
+	}
 	cfg, err := config.ReadSopsConfig(sopsPath)
 	if err != nil {
 		return validateResult{name: ".sops.yaml", note: "missing or unreadable", warn: true}
@@ -226,6 +251,159 @@ func validateGitCryptAttributes() validateResult {
 	}
 
 	return validateResult{name: ".gitattributes", note: "pattern found"}
+}
+
+func validateRepoAccess(secrets *config.EnvironmentSecrets) validateResult {
+	if validateSkipRepoCheck {
+		return validateResult{name: "repo access", note: "skipped", warn: true}
+	}
+	if secrets == nil {
+		return validateResult{name: "repo access", note: "skipped", warn: true}
+	}
+	path, err := exec.LookPath("git")
+	if err != nil {
+		return validateResult{name: "repo access", err: fmt.Errorf("git not found in PATH: %w", err)}
+	}
+
+	ref := strings.TrimSpace(secrets.Repo.TargetRevision)
+	if ref == "" {
+		ref = "HEAD"
+	}
+
+	ctx, cancel := contextWithTimeout(validateRepoTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, path, "ls-remote", "--exit-code", secrets.Repo.URL, ref) // #nosec G204
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return validateResult{name: "repo access", err: fmt.Errorf("git ls-remote failed: %w\n  output: %s", err, string(output))}
+	}
+
+	return validateResult{name: "repo access", note: "reachable"}
+}
+
+func validateSSHRepoAccess(secrets *config.EnvironmentSecrets) validateResult {
+	if validateSkipSSHCheck {
+		return validateResult{name: "ssh repo access", note: "skipped", warn: true}
+	}
+	if secrets == nil {
+		return validateResult{name: "ssh repo access", note: "skipped", warn: true}
+	}
+
+	repoURL := strings.TrimSpace(secrets.Repo.URL)
+	if !strings.HasPrefix(repoURL, "git@") && !strings.HasPrefix(repoURL, "ssh://") {
+		return validateResult{name: "ssh repo access", note: "non-ssh url", warn: true}
+	}
+
+	key := strings.TrimSpace(secrets.Repo.SSHPrivateKey)
+	if key == "" {
+		return validateResult{name: "ssh repo access", err: fmt.Errorf("repo.sshPrivateKey is empty")}
+	}
+
+	path, err := exec.LookPath("git")
+	if err != nil {
+		return validateResult{name: "ssh repo access", err: fmt.Errorf("git not found in PATH: %w", err)}
+	}
+
+	keyFile, err := os.CreateTemp("", "cluster-bootstrap-ssh-*")
+	if err != nil {
+		return validateResult{name: "ssh repo access", err: fmt.Errorf("failed to create temp ssh key: %w", err)}
+	}
+	defer func() {
+		_ = os.Remove(keyFile.Name())
+	}()
+	if err := os.WriteFile(keyFile.Name(), []byte(key), 0600); err != nil {
+		return validateResult{name: "ssh repo access", err: fmt.Errorf("failed to write temp ssh key: %w", err)}
+	}
+
+	ref := strings.TrimSpace(secrets.Repo.TargetRevision)
+	if ref == "" {
+		ref = "HEAD"
+	}
+
+	ctx, cancel := contextWithTimeout(validateRepoTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, path, "ls-remote", "--exit-code", repoURL, ref) // #nosec G204
+	cmd.Env = append(os.Environ(), fmt.Sprintf("GIT_SSH_COMMAND=ssh -i %s -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null", keyFile.Name()))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return validateResult{name: "ssh repo access", err: fmt.Errorf("git ls-remote via ssh failed: %w\n  output: %s", err, string(output))}
+	}
+
+	return validateResult{name: "ssh repo access", note: "reachable"}
+}
+
+func validateHelmLint(env, appPath string, appErr error) validateResult {
+	if validateSkipHelmLint {
+		return validateResult{name: "helm lint", note: "skipped", warn: true}
+	}
+	if appErr != nil {
+		return validateResult{name: "helm lint", note: "skipped", warn: true}
+	}
+	chartPath := filepath.Join(baseDir, appPath)
+	valuesPath := filepath.Join(chartPath, "values.yaml")
+	if _, err := os.Stat(valuesPath); err != nil {
+		return validateResult{name: "helm lint", err: fmt.Errorf("values.yaml not found in %s", chartPath)}
+	}
+
+	args := []string{"lint", chartPath, "-f", valuesPath}
+	envValues := filepath.Join(chartPath, "values", fmt.Sprintf("%s.yaml", env))
+	if _, err := os.Stat(envValues); err == nil {
+		args = append(args, "-f", envValues)
+	} else {
+		return validateResult{name: "helm lint", note: "missing values/<env>.yaml", warn: true}
+	}
+
+	path, err := exec.LookPath("helm")
+	if err != nil {
+		return validateResult{name: "helm lint", err: fmt.Errorf("helm not found in PATH: %w", err)}
+	}
+
+	ctx, cancel := contextWithTimeout(validateHelmTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, path, args...) // #nosec G204
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return validateResult{name: "helm lint", err: fmt.Errorf("helm lint failed: %w\n  output: %s", err, string(output))}
+	}
+
+	return validateResult{name: "helm lint", note: "passed"}
+}
+
+func validateArgoCDCRDs() validateResult {
+	if validateSkipCRDCheck {
+		return validateResult{name: "argocd crds", note: "skipped", warn: true}
+	}
+	if validateSkipClusterCheck {
+		return validateResult{name: "argocd crds", note: "skipped", warn: true}
+	}
+
+	client, err := k8s.NewClient(validateKubeconfig, validateContext)
+	if err != nil {
+		return validateResult{name: "argocd crds", err: err}
+	}
+
+	resources, err := client.Clientset.Discovery().ServerResourcesForGroupVersion("argoproj.io/v1alpha1")
+	if err != nil {
+		return validateResult{name: "argocd crds", note: "applications.argoproj.io not found", warn: true}
+	}
+
+	for _, res := range resources.APIResources {
+		if res.Name == "applications" {
+			return validateResult{name: "argocd crds", note: "applications found"}
+		}
+	}
+
+	return validateResult{name: "argocd crds", note: "applications resource missing", warn: true}
+}
+
+func contextWithTimeout(seconds int) (context.Context, context.CancelFunc) {
+	if seconds <= 0 {
+		return context.Background(), func() {}
+	}
+	return context.WithTimeout(context.Background(), time.Duration(seconds)*time.Second)
 }
 
 func runValidateCheck(stage *StageLogger, name string, fn func() (string, error)) validateResult {
