@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.4.1...v1.5.0) (2026-02-17)
+
+
+### Features
+
+* Change cli binary name ([#34](https://github.com/user-cube/cluster-bootstrap/issues/34)) ([63107bd](https://github.com/user-cube/cluster-bootstrap/commit/63107bdd2452ac0748182d5be14d9c1141969175))
+
 ## [1.4.1](https://github.com/user-cube/cluster-bootstrap/compare/v1.4.0...v1.4.1) (2026-02-17)
 
 
