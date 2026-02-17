@@ -10,16 +10,16 @@ import (
 )
 
 // EnsureNamespace creates a namespace if it does not already exist.
-func (c *Client) EnsureNamespace(ctx context.Context, name string) error {
+func (c *Client) EnsureNamespace(ctx context.Context, name string) (bool, error) {
 	_, err := c.Clientset.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
 	if err == nil {
-		return nil
+		return false, nil
 	}
 	if !apierrors.IsNotFound(err) {
 		if apierrors.IsForbidden(err) {
-			return fmt.Errorf("permission denied: cannot get namespace %s: %w\n  hint: verify your cluster role has permission to get namespaces", name, err)
+			return false, fmt.Errorf("permission denied: cannot get namespace %s: %w\n  hint: verify your cluster role has permission to get namespaces", name, err)
 		}
-		return fmt.Errorf("failed to get namespace %s: %w", name, err)
+		return false, fmt.Errorf("failed to get namespace %s: %w", name, err)
 	}
 
 	ns := &corev1.Namespace{
@@ -30,11 +30,11 @@ func (c *Client) EnsureNamespace(ctx context.Context, name string) error {
 	_, err = c.Clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
 	if err != nil {
 		if apierrors.IsForbidden(err) {
-			return fmt.Errorf("permission denied: cannot create namespace %s: %w\n  hint: verify your cluster role has permission to create namespaces", name, err)
+			return false, fmt.Errorf("permission denied: cannot create namespace %s: %w\n  hint: verify your cluster role has permission to create namespaces", name, err)
 		}
-		return fmt.Errorf("failed to create namespace %s: %w", name, err)
+		return false, fmt.Errorf("failed to create namespace %s: %w", name, err)
 	}
-	return nil
+	return true, nil
 }
 
 // CreateRepoSSHSecret creates or updates the repo-ssh-key secret in the argocd namespace.
@@ -102,7 +102,7 @@ func (c *Client) CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey
 // The key data is the raw symmetric key used by git-crypt.
 // Returns a boolean indicating if it was created (true) or updated (false).
 func (c *Client) CreateGitCryptKeySecret(ctx context.Context, keyData []byte) (bool, error) {
-	if err := c.EnsureNamespace(ctx, "argocd"); err != nil {
+	if _, err := c.EnsureNamespace(ctx, "argocd"); err != nil {
 		return false, err
 	}
 

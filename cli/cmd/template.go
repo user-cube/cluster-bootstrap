@@ -93,12 +93,21 @@ func runCustomize(cmd *cobra.Command, args []string) error {
 		currentRepo = defaultRepo
 	}
 
+	// Detect current app path from apps/values.yaml
+	currentAppPath, err := detectCurrentAppPath(workspaceRoot)
+	if err != nil {
+		if verbose {
+			fmt.Printf("⚠️  Could not detect current app path: %v. Using default.\n", err)
+		}
+		currentAppPath = defaultAppPath
+	}
+
 	// Show summary
 	fmt.Println("\n📝 Template Customization Summary")
 	fmt.Println("═══════════════════════════════════")
 	fmt.Printf("Organization:  %s → %s\n", currentOrg, orgFlag)
 	fmt.Printf("Repository:    %s → %s\n", currentRepo, repoFlag)
-	fmt.Printf("App Path:      %s\n", appPathFlag)
+	fmt.Printf("App Path:      %s → %s\n", currentAppPath, appPathFlag)
 	fmt.Printf("Go Module:     github.com/%s/%s → github.com/%s/%s\n",
 		currentOrg, currentRepo, orgFlag, repoFlag)
 
@@ -167,7 +176,7 @@ func runCustomize(cmd *cobra.Command, args []string) error {
 		},
 		{
 			name:    "App path in values",
-			pattern: fmt.Sprintf("path: %s", defaultAppPath),
+			pattern: fmt.Sprintf("path: %s", currentAppPath),
 			replace: fmt.Sprintf("path: %s", appPathFlag),
 			files:   []string{"apps/values.yaml"},
 		},
@@ -322,6 +331,24 @@ func detectCurrentValues(workspaceRoot string) (org, repo string, err error) {
 	}
 
 	return matches[1], matches[2], nil
+}
+
+func detectCurrentAppPath(workspaceRoot string) (string, error) {
+	valuesPath := filepath.Join(workspaceRoot, "apps", "values.yaml")
+	content, err := os.ReadFile(valuesPath) //#nosec G304 -- path is constructed from detected workspace root, not user input
+	if err != nil {
+		return "", err
+	}
+
+	// Parse "path: <value>" from values.yaml
+	// Look for source.path or just path: in the file
+	re := regexp.MustCompile(`(?m)^\s*path:\s+(\S+)`)
+	matches := re.FindStringSubmatch(string(content))
+	if len(matches) != 2 {
+		return "", fmt.Errorf("could not parse path from apps/values.yaml")
+	}
+
+	return matches[1], nil
 }
 
 func getWorkspaceRoot() (string, error) {

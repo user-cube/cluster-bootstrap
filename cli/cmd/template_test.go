@@ -127,6 +127,80 @@ go 1.25.0
 	assert.Error(t, err)
 }
 
+func TestDetectCurrentAppPath(t *testing.T) {
+	tests := []struct {
+		name         string
+		valuesYAML   string
+		expectedPath string
+		wantErr      bool
+	}{
+		{
+			name: "standard app path",
+			valuesYAML: `source:
+  repoURL: git@github.com:org/repo.git
+  targetRevision: main
+  path: apps
+destination:
+  server: https://kubernetes.default.svc
+`,
+			expectedPath: "apps",
+			wantErr:      false,
+		},
+		{
+			name: "custom app path",
+			valuesYAML: `source:
+  repoURL: git@github.com:org/repo.git
+  targetRevision: main
+  path: custom/my-apps
+destination:
+  server: https://kubernetes.default.svc
+`,
+			expectedPath: "custom/my-apps",
+			wantErr:      false,
+		},
+		{
+			name: "indented path",
+			valuesYAML: `spec:
+  source:
+    repoURL: git@github.com:org/repo.git
+    targetRevision: main
+    path: nested-apps
+`,
+			expectedPath: "nested-apps",
+			wantErr:      false,
+		},
+		{
+			name: "missing path",
+			valuesYAML: `source:
+  repoURL: git@github.com:org/repo.git
+  targetRevision: main
+`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			appsDir := filepath.Join(tmpDir, "apps")
+			err := os.MkdirAll(appsDir, 0755)
+			require.NoError(t, err)
+
+			valuesPath := filepath.Join(appsDir, "values.yaml")
+			err = os.WriteFile(valuesPath, []byte(tt.valuesYAML), 0644)
+			require.NoError(t, err)
+
+			path, err := detectCurrentAppPath(tmpDir)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedPath, path)
+			}
+		})
+	}
+}
+
 func TestApplyReplacement(t *testing.T) {
 	// Create temporary workspace
 	tmpDir := t.TempDir()
@@ -425,4 +499,51 @@ import (
 	updatedGoFile, err := os.ReadFile(filepath.Join(cmdDir, "test.go"))
 	require.NoError(t, err)
 	assert.Contains(t, string(updatedGoFile), `"github.com/mycompany/k8s-gitops/cli/internal/config"`)
+}
+
+func TestReCustomization_AppPath(t *testing.T) {
+	// Test that re-customization with a different app-path works correctly
+	// This validates the fix for detecting current app path instead of hardcoding "apps"
+	tmpDir := t.TempDir()
+
+	// Create directories
+	appsDir := filepath.Join(tmpDir, "apps")
+	err := os.MkdirAll(appsDir, 0755)
+	require.NoError(t, err)
+
+	// Create apps/values.yaml with a custom path (already customized once)
+	appsValuesContent := `repoSource:
+  url: git@github.com:mycompany/k8s-gitops.git
+  path: custom/apps
+destination:
+  server: https://kubernetes.default.svc
+`
+	err = os.WriteFile(filepath.Join(appsDir, "values.yaml"), []byte(appsValuesContent), 0644)
+	require.NoError(t, err)
+
+	// Detect current app path
+	currentAppPath, err := detectCurrentAppPath(tmpDir)
+	require.NoError(t, err)
+	assert.Equal(t, "custom/apps", currentAppPath)
+
+	// Now re-customize with a different app path
+	newAppPath := "kubernetes/applications"
+
+	// Apply replacement using detected current path
+	r := replacement{
+		name:    "App path",
+		pattern: fmt.Sprintf("path: %s", currentAppPath),
+		replace: fmt.Sprintf("path: %s", newAppPath),
+		files:   []string{"apps/values.yaml"},
+	}
+
+	count, err := applyReplacement(tmpDir, r, false)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count, "Expected 1 file to be updated")
+
+	// Verify the change
+	updatedAppsValues, err := os.ReadFile(filepath.Join(appsDir, "values.yaml"))
+	require.NoError(t, err)
+	assert.Contains(t, string(updatedAppsValues), "path: kubernetes/applications")
+	assert.NotContains(t, string(updatedAppsValues), "path: custom/apps")
 }

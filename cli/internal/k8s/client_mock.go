@@ -36,15 +36,21 @@ func NewMockClient() *MockClient {
 }
 
 // EnsureNamespace simulates namespace creation with mock state.
-func (m *MockClient) EnsureNamespace(ctx context.Context, name string) error {
+func (m *MockClient) EnsureNamespace(ctx context.Context, name string) (bool, error) {
 	if m.EnsureNamespaceErr != nil {
-		return m.EnsureNamespaceErr
+		return false, m.EnsureNamespaceErr
 	}
 	if m.EnsureNamespaceForbidden {
-		return fmt.Errorf("permission denied: cannot create namespace %s: Forbidden", name)
+		return false, fmt.Errorf("permission denied: cannot create namespace %s: Forbidden", name)
 	}
+
+	// Check if namespace already exists
+	if m.Namespaces[name] {
+		return false, nil
+	}
+
 	m.Namespaces[name] = true
-	return nil
+	return true, nil
 }
 
 // CreateRepoSSHSecret simulates secret creation with mock state.
@@ -178,7 +184,7 @@ func (m *MockClient) GetApplication(name string) *unstructured.Unstructured {
 // ClientInterface defines the interface that both Client and MockClient implement.
 // This is useful for testing code that uses a K8s client.
 type ClientInterface interface {
-	EnsureNamespace(ctx context.Context, name string) error
+	EnsureNamespace(ctx context.Context, name string) (bool, error)
 	CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey string, dryRun bool) (*corev1.Secret, bool, error)
 	CreateGitCryptKeySecret(ctx context.Context, keyData []byte) (bool, error)
 	ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, dryRun bool) (string, bool, error)

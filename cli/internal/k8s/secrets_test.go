@@ -128,8 +128,9 @@ func TestEnsureNamespace_Idempotent(t *testing.T) {
 		fakeClient := fake.NewSimpleClientset()
 		client := &Client{Clientset: fakeClient}
 
-		err := client.EnsureNamespace(ctx, "argocd")
+		created, err := client.EnsureNamespace(ctx, "argocd")
 		require.NoError(t, err)
+		assert.True(t, created, "namespace should be created")
 
 		ns, err := fakeClient.CoreV1().Namespaces().Get(ctx, "argocd", metav1.GetOptions{})
 		require.NoError(t, err)
@@ -144,8 +145,9 @@ func TestEnsureNamespace_Idempotent(t *testing.T) {
 		fakeClient := fake.NewSimpleClientset(existingNS)
 		client := &Client{Clientset: fakeClient}
 
-		err := client.EnsureNamespace(ctx, "argocd")
+		created, err := client.EnsureNamespace(ctx, "argocd")
 		require.NoError(t, err, "should not fail when namespace already exists")
+		assert.False(t, created, "namespace should not be created when it already exists")
 	})
 }
 
@@ -182,8 +184,9 @@ func TestBootstrapIdempotence_Integration(t *testing.T) {
 
 	// First bootstrap run
 	t.Log("First bootstrap run")
-	err := client.EnsureNamespace(ctx, "argocd")
+	created, err := client.EnsureNamespace(ctx, "argocd")
 	require.NoError(t, err)
+	assert.True(t, created, "first run should create namespace")
 
 	_, created1, err := client.CreateRepoSSHSecret(ctx, repoURL, sshKey, false)
 	require.NoError(t, err)
@@ -195,8 +198,9 @@ func TestBootstrapIdempotence_Integration(t *testing.T) {
 
 	// Second bootstrap run (idempotent)
 	t.Log("Second bootstrap run (idempotent)")
-	err = client.EnsureNamespace(ctx, "argocd")
+	created, err = client.EnsureNamespace(ctx, "argocd")
 	require.NoError(t, err, "namespace creation is idempotent")
+	assert.False(t, created, "second run should not create namespace")
 
 	_, created3, err := client.CreateRepoSSHSecret(ctx, repoURL, sshKey, false)
 	require.NoError(t, err)

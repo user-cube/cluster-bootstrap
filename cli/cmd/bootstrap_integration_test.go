@@ -20,7 +20,7 @@ func TestBootstrapIntegration_PermissionDenied(t *testing.T) {
 	mockClient.EnsureNamespaceForbidden = true
 
 	ctx := context.Background()
-	err := mockClient.EnsureNamespace(ctx, "argocd")
+	_, err := mockClient.EnsureNamespace(ctx, "argocd")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "permission denied")
 	assert.Contains(t, err.Error(), "cannot create namespace")
@@ -32,9 +32,10 @@ func TestBootstrapIntegration_SecretCreationFails(t *testing.T) {
 	mockClient.CreateSecretForbidden = true
 
 	ctx := context.Background()
-	require.NoError(t, mockClient.EnsureNamespace(ctx, "argocd"))
+	_, err := mockClient.EnsureNamespace(ctx, "argocd")
+	require.NoError(t, err)
 
-	_, _, err := mockClient.CreateRepoSSHSecret(ctx, "ssh://git@example.com/repo.git", "key-data", false)
+	_, _, err = mockClient.CreateRepoSSHSecret(ctx, "ssh://git@example.com/repo.git", "key-data", false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "permission denied")
 	assert.Contains(t, err.Error(), "cannot create secrets")
@@ -74,7 +75,8 @@ func TestBootstrapIntegration_SuccessfulFlow(t *testing.T) {
 	ctx := context.Background()
 
 	// Step 1: Ensure namespace
-	require.NoError(t, mockClient.EnsureNamespace(ctx, "argocd"))
+	_, err := mockClient.EnsureNamespace(ctx, "argocd")
+	require.NoError(t, err)
 	assert.True(t, mockClient.Namespaces["argocd"])
 
 	// Step 2: Create repo SSH secret
@@ -99,10 +101,11 @@ func TestBootstrapIntegration_DryRun(t *testing.T) {
 	mockClient := k8s.NewMockClient()
 
 	ctx := context.Background()
-	require.NoError(t, mockClient.EnsureNamespace(ctx, "argocd"))
+	_, err := mockClient.EnsureNamespace(ctx, "argocd")
+	require.NoError(t, err)
 
 	// Create secret in dry-run mode
-	_, _, err := mockClient.CreateRepoSSHSecret(ctx, "ssh://git@example.com/repo.git", "key", true)
+	_, _, err = mockClient.CreateRepoSSHSecret(ctx, "ssh://git@example.com/repo.git", "key", true)
 	require.NoError(t, err)
 
 	// Secret should not be stored
@@ -115,7 +118,8 @@ func TestBootstrapIntegration_GitCryptKey(t *testing.T) {
 	mockClient := k8s.NewMockClient()
 	ctx := context.Background()
 
-	require.NoError(t, mockClient.EnsureNamespace(ctx, "argocd"))
+	_, err := mockClient.EnsureNamespace(ctx, "argocd")
+	require.NoError(t, err)
 
 	keyData := []byte("mock-git-crypt-key-data")
 	created, err := mockClient.CreateGitCryptKeySecret(ctx, keyData)
@@ -135,7 +139,7 @@ func TestBootstrapIntegration_SequentialErrors(t *testing.T) {
 
 	// First attempt: permission denied
 	mockClient.EnsureNamespaceForbidden = true
-	err := mockClient.EnsureNamespace(ctx, "argocd")
+	_, err := mockClient.EnsureNamespace(ctx, "argocd")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "permission denied")
 
@@ -143,7 +147,8 @@ func TestBootstrapIntegration_SequentialErrors(t *testing.T) {
 	mockClient.EnsureNamespaceForbidden = false
 
 	// Retry: should succeed
-	require.NoError(t, mockClient.EnsureNamespace(ctx, "argocd"))
+	_, err = mockClient.EnsureNamespace(ctx, "argocd")
+	require.NoError(t, err)
 	assert.True(t, mockClient.Namespaces["argocd"])
 }
 
@@ -165,8 +170,9 @@ func TestBootstrapIntegration_AppOfAppsWithEnv(t *testing.T) {
 			mockClient := k8s.NewMockClient()
 			ctx := context.Background()
 
-			require.NoError(t, mockClient.EnsureNamespace(ctx, "argocd"))
-			_, _, err := mockClient.CreateRepoSSHSecret(ctx, "ssh://git@example.com/repo.git", "key", false)
+			_, err := mockClient.EnsureNamespace(ctx, "argocd")
+			require.NoError(t, err)
+			_, _, err = mockClient.CreateRepoSSHSecret(ctx, "ssh://git@example.com/repo.git", "key", false)
 			require.NoError(t, err)
 
 			_, _, err = mockClient.ApplyAppOfApps(ctx, "ssh://git@example.com/repo.git", "main", tt.env, tt.appPath, false)
