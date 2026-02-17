@@ -3,18 +3,23 @@ package helm
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
-	"helm.sh/helm/v3/pkg/action"
-	"helm.sh/helm/v3/pkg/chart/loader"
-	"helm.sh/helm/v3/pkg/chartutil"
-	"helm.sh/helm/v3/pkg/cli"
-	"helm.sh/helm/v3/pkg/getter"
-	"helm.sh/helm/v3/pkg/repo"
+	"helm.sh/helm/v4/pkg/action"
+	"helm.sh/helm/v4/pkg/chart/common"
+	"helm.sh/helm/v4/pkg/chart/common/util"
+	"helm.sh/helm/v4/pkg/chart/loader"
+	chart "helm.sh/helm/v4/pkg/chart/v2"
+	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/getter"
+	"helm.sh/helm/v4/pkg/kube"
+	release "helm.sh/helm/v4/pkg/release/v1"
+	repo "helm.sh/helm/v4/pkg/repo/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/memory"
@@ -83,15 +88,16 @@ func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir st
 
 	// Build action configuration
 	actionConfig := new(action.Configuration)
-	logFunc := func(format string, v ...interface{}) {}
 	if verbose {
-		logFunc = func(format string, v ...interface{}) {
-			fmt.Printf("  [helm] "+format+"\n", v...)
-		}
+		// Setup logging handler for verbose output
+		handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		})
+		actionConfig.SetLogger(handler)
 	}
 
 	restClientGetter := newRESTClientGetter(kubeconfig, kubeContext, argoCDNamespace)
-	if err := actionConfig.Init(restClientGetter, argoCDNamespace, "secret", logFunc); err != nil {
+	if err := actionConfig.Init(restClientGetter, argoCDNamespace, "secret"); err != nil {
 		return fmt.Errorf("failed to init helm action config: %w", err)
 	}
 
@@ -108,7 +114,7 @@ func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir st
 	}
 
 	// Load the chart
-	chart, err := loader.Load(chartPath)
+	loadedChart, err := loader.Load(chartPath)
 	if err != nil {
 		return fmt.Errorf("failed to load chart: %w\n  hint: verify the downloaded chart is not corrupted", err)
 	}
@@ -120,7 +126,10 @@ func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir st
 	}
 
 	if verbose {
-		fmt.Printf("  Chart: %s-%s\n", chart.Metadata.Name, chart.Metadata.Version)
+		// Type assert to access Metadata
+		if ch, ok := loadedChart.(*chart.Chart); ok {
+			fmt.Printf("  Chart: %s-%s\n", ch.Metadata.Name, ch.Metadata.Version)
+		}
 	}
 
 	// Check if release exists; if not, install; otherwise upgrade
@@ -133,11 +142,11 @@ func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir st
 		install := action.NewInstall(actionConfig)
 		install.ReleaseName = argoCDRelease
 		install.Namespace = argoCDNamespace
-		install.Wait = true
+		install.WaitStrategy = kube.StatusWatcherStrategy
 		install.Timeout = 5 * time.Minute
 		install.CreateNamespace = true
 
-		rel, err := install.RunWithContext(ctx, chart, vals)
+		rel, err := install.RunWithContext(ctx, loadedChart, vals)
 		if err != nil {
 			errMsg := err.Error()
 			hint := "verify ArgoCD is not already installed and chart values are valid"
@@ -151,17 +160,20 @@ func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir st
 			return fmt.Errorf("failed to install ArgoCD: %w\n  hint: %s", err, hint)
 		}
 		if verbose {
-			fmt.Printf("  Release %s installed, status: %s\n", rel.Name, rel.Info.Status)
+			// Type assert to access Name and Info
+			if r, ok := rel.(*release.Release); ok {
+				fmt.Printf("  Release %s installed, status: %s\n", r.Name, r.Info.Status)
+			}
 		}
 		return nil
 	}
 
 	upgrade := action.NewUpgrade(actionConfig)
-	upgrade.Wait = true
+	upgrade.WaitStrategy = kube.StatusWatcherStrategy
 	upgrade.Timeout = 5 * time.Minute
 	upgrade.Namespace = argoCDNamespace
 
-	rel, err := upgrade.RunWithContext(ctx, argoCDRelease, chart, vals)
+	rel, err := upgrade.RunWithContext(ctx, argoCDRelease, loadedChart, vals)
 	if err != nil {
 		errMsg := err.Error()
 		hint := "verify ArgoCD release configuration and chart values"
@@ -174,7 +186,10 @@ func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir st
 	}
 
 	if verbose {
-		fmt.Printf("  Release %s upgraded, status: %s\n", rel.Name, rel.Info.Status)
+		// Type assert to access Name and Info
+		if r, ok := rel.(*release.Release); ok {
+			fmt.Printf("  Release %s upgraded, status: %s\n", r.Name, r.Info.Status)
+		}
 	}
 
 	return nil
@@ -230,12 +245,12 @@ func loadValues(baseDir, env string) (map[string]interface{}, error) {
 	baseFile := filepath.Join(baseDir, "components/argocd/values/base.yaml")
 	envFile := filepath.Join(baseDir, fmt.Sprintf("components/argocd/values/%s.yaml", env))
 
-	baseVals, err := chartutil.ReadValuesFile(baseFile)
+	baseVals, err := common.ReadValuesFile(baseFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read base values %s: %w", baseFile, err)
 	}
 
-	envVals, err := chartutil.ReadValuesFile(envFile)
+	envVals, err := common.ReadValuesFile(envFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return baseVals.AsMap(), nil
@@ -244,7 +259,7 @@ func loadValues(baseDir, env string) (map[string]interface{}, error) {
 	}
 
 	// Merge: env values override base values
-	merged := chartutil.MergeTables(baseVals.AsMap(), envVals.AsMap())
+	merged := util.MergeTables(baseVals.AsMap(), envVals.AsMap())
 	return merged, nil
 }
 
