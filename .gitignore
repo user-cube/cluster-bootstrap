@@ -31,3 +31,6 @@ venv
 
 # Node
 node_modules/
+
+# Git Crypt
+git-crypt-key
