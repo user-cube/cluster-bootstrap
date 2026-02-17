@@ -221,7 +221,7 @@ func TestBootstrapIdempotence_Integration(t *testing.T) {
 	// Verify final state
 	secret, err := fakeClient.CoreV1().Secrets("argocd").Get(ctx, "repo-ssh-key", metav1.GetOptions{})
 	require.NoError(t, err)
-	assert.Equal(t, newRepoURL, secret.StringData["url"], "secret should have latest URL")
+	assert.Equal(t, newRepoURL, string(secret.Data["url"]), "secret should have latest URL")
 }
 
 // TestApplyAppOfApps_MultipleRuns ensures Apply is idempotent
