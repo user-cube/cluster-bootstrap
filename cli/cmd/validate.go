@@ -274,6 +274,20 @@ func validateRepoAccess(secrets *config.EnvironmentSecrets) validateResult {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, path, "ls-remote", "--exit-code", "--", secrets.Repo.URL, ref) // #nosec G204
+
+	// Disable interactive prompts so validation fails fast instead of hanging for credentials.
+	env := append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+
+	repoURL := secrets.Repo.URL
+	if strings.HasPrefix(repoURL, "ssh://") || strings.Contains(repoURL, "@") {
+		sshCommand := os.Getenv("GIT_SSH_COMMAND")
+		if sshCommand == "" {
+			sshCommand = "ssh -o BatchMode=yes"
+		}
+		env = append(env, "GIT_SSH_COMMAND="+sshCommand)
+	}
+
+	cmd.Env = env
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return validateResult{name: "repo access", err: fmt.Errorf("git ls-remote failed: %w\n  output: %s", err, string(output))}
