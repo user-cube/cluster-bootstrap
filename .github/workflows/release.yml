@@ -23,19 +23,25 @@ jobs:
       new-release: ${{ steps.semantic.outputs.new_release_published }}
       version: ${{ steps.semantic.outputs.new_release_version }}
     steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-
       - uses: actions/create-github-app-token@v2
         id: app
         with:
           app-id: ${{ secrets.DEVOPS_BUDDY_APP_ID }}
           private-key: ${{ secrets.DEVOPS_BUDDY_PRIVATE_KEY }}
+
+      - name: Setup Git (bot da App)
+        run: |
+          git config --global user.name "${{ steps.app.outputs.app-slug }}[bot]"
+          git config --global user.email "${{ steps.app.outputs.app-slug }}[bot]@users.noreply.github.com"
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
 
       - id: semantic
         uses: cycjimmy/semantic-release-action@v4
