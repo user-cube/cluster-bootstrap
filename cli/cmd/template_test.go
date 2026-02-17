@@ -475,9 +475,8 @@ func TestEndToEnd_Customization(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create apps/values.yaml
-	appsValuesContent := `repoSource:
+	appsValuesContent := `repo:
   url: git@github.com:user-cube/cluster-bootstrap.git
-  path: apps
 `
 	err = os.WriteFile(filepath.Join(appsDir, "values.yaml"), []byte(appsValuesContent), 0644)
 	require.NoError(t, err)
