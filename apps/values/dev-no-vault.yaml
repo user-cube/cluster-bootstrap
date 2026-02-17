@@ -1,0 +1,69 @@
+# Simplified setup without Vault
+# Use this when you don't need centralized secrets management
+# Bootstrap will create the repo-ssh-key secret directly via argocd-repo-secret with backend: none
+
+environment: dev
+
+# Same repo configuration
+repo:
+  url: git@github.com:user-cube/cluster-bootstrap.git
+  targetRevision: main
+
+components:
+  # ArgoCD - Required
+  argocd:
+    enabled: true
+    namespace: argocd
+    syncWave: "0"
+    syncOptions:
+      - ServerSideApply=true
+
+  # Vault - DISABLED (not needed)
+  vault:
+    enabled: false
+    namespace: vault
+    syncWave: "1"
+
+  # External Secrets - OPTIONAL (only needed if you want secret synchronization)
+  external-secrets:
+    enabled: false
+    namespace: external-secrets
+    syncWave: "1"
+    syncOptions:
+      - ServerSideApply=true
+
+  # ArgoCD Repo Secret - ENABLED with backend: none
+  # When backend is "none", no ExternalSecret is deployed
+  # Bootstrap command creates repo-ssh-key secret directly
+  argocd-repo-secret:
+    enabled: true
+    namespace: argocd
+    syncWave: "2"
+    createNamespace: false
+    backend: none
+
+  # Monitoring stack - optional
+  prometheus-operator-crds:
+    enabled: true
+    namespace: monitoring
+    syncWave: "2"
+    hasValues: false
+    syncOptions:
+      - ServerSideApply=true
+      - Replace=true
+
+  reloader:
+    enabled: true
+    namespace: reloader
+    syncWave: "2"
+
+  kube-prometheus-stack:
+    enabled: true
+    namespace: monitoring
+    syncWave: "3"
+
+  # Trivy security scanning - optional
+  trivy-operator:
+    enabled: false
+    namespace: trivy-system
+    syncWave: "3"

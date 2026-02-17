@@ -1,0 +1,62 @@
+# Setup with AWS Secrets Manager
+# Uses External Secrets Operator to sync secrets from AWS into Kubernetes
+
+environment: dev
+
+repo:
+  url: git@github.com:user-cube/cluster-bootstrap.git
+  targetRevision: main
+
+components:
+  argocd:
+    enabled: true
+    namespace: argocd
+    syncWave: "0"
+    syncOptions:
+      - ServerSideApply=true
+
+  # No Vault
+  vault:
+    enabled: false
+    namespace: vault
+    syncWave: "1"
+
+  # External Secrets required for AWS integration
+  external-secrets:
+    enabled: true
+    namespace: external-secrets
+    syncWave: "1"
+    syncOptions:
+      - ServerSideApply=true
+
+  # ArgoCD Repo Secret - ENABLED with AWS backend
+  argocd-repo-secret:
+    enabled: true
+    namespace: argocd
+    syncWave: "2"
+    createNamespace: false
+    backend: aws-secrets  # Use AWS Secrets Manager
+
+  prometheus-operator-crds:
+    enabled: true
+    namespace: monitoring
+    syncWave: "2"
+    hasValues: false
+    syncOptions:
+      - ServerSideApply=true
+      - Replace=true
+
+  reloader:
+    enabled: true
+    namespace: reloader
+    syncWave: "2"
+
+  kube-prometheus-stack:
+    enabled: true
+    namespace: monitoring
+    syncWave: "3"
+
+  trivy-operator:
+    enabled: false
+    namespace: trivy-system
+    syncWave: "3"
