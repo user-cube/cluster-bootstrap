@@ -52,6 +52,7 @@ nav:
       - bootstrap: cli/bootstrap.md
       - doctor: cli/doctor.md
       - status: cli/status.md
+      - validate: cli/validate.md
       - init: cli/init.md
       - vault-token: cli/vault-token.md
       - gitcrypt-key: cli/gitcrypt-key.md
