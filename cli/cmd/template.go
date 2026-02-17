@@ -93,13 +93,6 @@ func runCustomize(cmd *cobra.Command, args []string) error {
 		currentRepo = defaultRepo
 	}
 
-	// Check if already customized with these values
-	if currentOrg == orgFlag && currentRepo == repoFlag && !forceFlag {
-		fmt.Printf("✅ Template already customized with org=%s repo=%s\n", orgFlag, repoFlag)
-		fmt.Println("   Use --force to re-apply customization")
-		return nil
-	}
-
 	// Show summary
 	fmt.Println("\n📝 Template Customization Summary")
 	fmt.Println("═══════════════════════════════════")
