@@ -88,6 +88,13 @@ func (c *Client) CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey
 	existing.Labels = secret.Labels
 	existing.Annotations = secret.Annotations
 	existing.StringData = secret.StringData
+	// Also update Data field for compatibility with fake clients that don't auto-convert StringData
+	if existing.Data == nil {
+		existing.Data = make(map[string][]byte)
+	}
+	for k, v := range secret.StringData {
+		existing.Data[k] = []byte(v)
+	}
 	_, err = c.Clientset.CoreV1().Secrets("argocd").Update(ctx, existing, metav1.UpdateOptions{})
 	if err != nil {
 		if apierrors.IsForbidden(err) {
