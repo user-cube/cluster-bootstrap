@@ -250,15 +250,20 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	secretsK8sTimer := startStage("Creating K8s Resources")
 	secretsK8sStage := logger.Stage("Creating K8s Secrets")
 	stepf("Creating Kubernetes secrets...")
-	if err := client.EnsureNamespace(ctx, "argocd"); err != nil {
+	namespaceCreated, err := client.EnsureNamespace(ctx, "argocd")
+	if err != nil {
 		bootstrapErr = err
 		report.AddStage(secretsK8sTimer.complete(false, err))
 		return err
 	}
-	secretsK8sStage.Detail("✓ Created/verified namespace 'argocd'")
+	if namespaceCreated {
+		secretsK8sStage.Detail("✓ Created namespace 'argocd'")
+	} else {
+		secretsK8sStage.Detail("✓ Verified existing namespace 'argocd'")
+	}
 	report.Resources.Namespace = NamespaceReport{
 		Name:    "argocd",
-		Created: true, // Always report as created for simplicity (EnsureNamespace is idempotent)
+		Created: namespaceCreated,
 	}
 
 	_, repoSecretCreated, err := client.CreateRepoSSHSecret(ctx, envSecrets.Repo.URL, envSecrets.Repo.SSHPrivateKey, false)
