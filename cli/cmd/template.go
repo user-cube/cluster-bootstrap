@@ -188,14 +188,14 @@ func runCustomize(cmd *cobra.Command, args []string) error {
 		if verbose {
 			fmt.Printf("🔄 Processing: %s\n", r.name)
 		}
-		count, err := applyReplacement(workspaceRoot, r, dryRunFlag)
+		count, changedInReplacement, err := applyReplacement(workspaceRoot, r, dryRunFlag)
 		if err != nil {
 			fmt.Printf("❌ Failed: %v\n", err)
 			return err
 		}
 		if count > 0 {
 			fmt.Printf("   ✓ Updated %d file(s)\n", count)
-			for _, f := range r.files {
+			for _, f := range changedInReplacement {
 				changedFiles[f]++
 			}
 		} else if verbose {
