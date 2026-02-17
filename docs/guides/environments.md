@@ -89,4 +89,4 @@ Helm performs a deep merge, so only the overridden properties change — the res
 1. Create `apps/values/<env>.yaml` with `environment: <env>`
 2. Create `values/<env>.yaml` in each component under `components/`
 3. Create `secrets.<env>.enc.yaml` with encrypted credentials
-4. Bootstrap with `./cli/cluster-bootstrap-cli bootstrap <env>`
+4. Bootstrap with `./cluster-bootstrap-cli/cluster-bootstrap-cli bootstrap <env>`

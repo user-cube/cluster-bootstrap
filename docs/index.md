@@ -34,6 +34,22 @@ This repo provides a fully automated, reproducible way to bootstrap a Kubernetes
 
 \** See [Secret Backends](guides/secret-backends.md) for configuration options.
 
+## Installation
+
+Install the CLI tool globally using `go install`:
+
+```bash
+# From GitHub
+go install github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli@latest
+
+# Or from local source
+git clone git@github.com:user-cube/cluster-bootstrap.git
+cd cluster-bootstrap
+go install ./cluster-bootstrap-cli
+```
+
+See [CLI Reference](cli/index.md) for details and alternative installation methods.
+
 ## Quick Links
 
 - [Prerequisites](getting-started/prerequisites.md) — what you need before starting

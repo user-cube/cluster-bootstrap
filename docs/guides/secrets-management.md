@@ -84,7 +84,7 @@ SOPS_AGE_KEY_FILE=./age-key.txt sops secrets.dev.enc.yaml
 The `init` command sets up SOPS and creates encrypted secrets interactively:
 
 ```bash
-./cli/cluster-bootstrap-cli init --provider age --age-key-file ./age-key.txt
+./cluster-bootstrap-cli/cluster-bootstrap-cli init --provider age --age-key-file ./age-key.txt
 ```
 
 This supports age, AWS KMS, and GCP KMS as encryption providers.
@@ -100,7 +100,7 @@ This supports age, AWS KMS, and GCP KMS as encryption providers.
 git-crypt init
 
 # Run the CLI init with git-crypt provider
-./cli/cluster-bootstrap-cli init --provider git-crypt
+./cluster-bootstrap-cli/cluster-bootstrap-cli init --provider git-crypt
 ```
 
 This will:
@@ -134,7 +134,7 @@ repo:
 git-crypt unlock
 
 # Bootstrap using git-crypt backend
-./cli/cluster-bootstrap-cli bootstrap dev --encryption git-crypt
+./cluster-bootstrap-cli/cluster-bootstrap-cli bootstrap dev --encryption git-crypt
 ```
 
 If ArgoCD needs to decrypt the repo, store the symmetric key as a K8s secret:
@@ -144,7 +144,7 @@ If ArgoCD needs to decrypt the repo, store the symmetric key as a K8s secret:
 git-crypt export-key /tmp/git-crypt-key
 
 # Store it in the cluster
-./cli/cluster-bootstrap-cli gitcrypt-key --key-file /tmp/git-crypt-key
+./cluster-bootstrap-cli/cluster-bootstrap-cli gitcrypt-key --key-file /tmp/git-crypt-key
 ```
 
 ### SOPS vs git-crypt
@@ -176,9 +176,9 @@ For staging and production, Vault requires initialization:
 kubectl exec -n vault vault-0 -- vault operator init
 
 # Store the root token
-./cli/cluster-bootstrap-cli vault-token --token <root-token>
-echo "<root-token>" | ./cli/cluster-bootstrap-cli vault-token
-./cli/cluster-bootstrap-cli vault-token
+./cluster-bootstrap-cli/cluster-bootstrap-cli vault-token --token <root-token>
+echo "<root-token>" | ./cluster-bootstrap-cli/cluster-bootstrap-cli vault-token
+./cluster-bootstrap-cli/cluster-bootstrap-cli vault-token
 ```
 
 ## External Secrets Operator

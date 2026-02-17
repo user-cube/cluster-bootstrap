@@ -51,9 +51,9 @@ Standalone mode with persistent storage. Vault must be manually initialized and 
 HA mode with Raft storage backend. Auto-unseal is enabled via the auto-unseal Job. After `vault operator init`, store the root token:
 
 ```bash
-./cli/cluster-bootstrap-cli vault-token --token <root-token>
-echo "<root-token>" | ./cli/cluster-bootstrap-cli vault-token
-./cli/cluster-bootstrap-cli vault-token
+./cluster-bootstrap-cli/cluster-bootstrap-cli vault-token --token <root-token>
+echo "<root-token>" | ./cluster-bootstrap-cli/cluster-bootstrap-cli vault-token
+./cluster-bootstrap-cli/cluster-bootstrap-cli vault-token
 ```
 
 ## Files

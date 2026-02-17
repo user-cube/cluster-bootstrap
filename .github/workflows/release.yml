@@ -64,8 +64,8 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version-file: cli/go.mod
-          cache-dependency-path: cli/go.sum
+          go-version-file: cluster-bootstrap-cli/go.mod
+          cache-dependency-path: cluster-bootstrap-cli/go.sum
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6

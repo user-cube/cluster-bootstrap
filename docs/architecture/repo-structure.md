@@ -78,7 +78,7 @@ Most components are thin wrappers around upstream Helm charts — `Chart.yaml` d
 
 ## `cli/` — Bootstrap CLI
 
-A Go application that automates cluster bootstrapping. Built with Cobra (CLI framework), it handles SOPS decryption, Helm installation, and Kubernetes resource creation. See the [CLI documentation](../cli/index.md) for details.
+A Go application that automates cluster bootstrapping. Built with Cobra (CLI framework), it handles SOPS decryption, Helm installation, and Kubernetes resource creation. See the [CLI documentation](../cluster-bootstrap-cli/index.md) for details.
 
 ## Config Files
 

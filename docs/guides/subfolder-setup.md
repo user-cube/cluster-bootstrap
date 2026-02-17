@@ -64,7 +64,7 @@ components:
 When running CLI commands, use the `--base-dir` flag to point to your subdirectory:
 
 ```bash
-./cli/cluster-bootstrap-cli --base-dir ./k8s bootstrap dev
+./cluster-bootstrap-cli/cluster-bootstrap-cli --base-dir ./k8s bootstrap dev
 ```
 
 This tells the CLI where to find:
@@ -78,7 +78,7 @@ This tells the CLI where to find:
 For bootstrap, specify the full path to the apps directory:
 
 ```bash
-./cli/cluster-bootstrap-cli --base-dir ./k8s bootstrap dev --app-path k8s/apps
+./cluster-bootstrap-cli/cluster-bootstrap-cli --base-dir ./k8s bootstrap dev --app-path k8s/apps
 ```
 
 ## Complete Example
@@ -146,7 +146,7 @@ components:
 ### 3. Initialize Secrets
 
 ```bash
-./cli/cluster-bootstrap-cli --base-dir ./k8s init --provider sops
+./cluster-bootstrap-cli/cluster-bootstrap-cli --base-dir ./k8s init --provider sops
 ```
 
 This creates `k8s/secrets.dev.enc.yaml` with the template.
@@ -177,7 +177,7 @@ cd /path/to/my-repo
 
 ```bash
 cd /path/to/my-repo/k8s
-./cli/cluster-bootstrap-cli bootstrap dev \
+./cluster-bootstrap-cli/cluster-bootstrap-cli bootstrap dev \
   --app-path apps \
   --wait-for-health -v
 ```
@@ -186,7 +186,7 @@ cd /path/to/my-repo/k8s
 
 ```bash
 cd /path/to/my-repo/k8s
-./cli/cluster-bootstrap-cli bootstrap dev \
+./cluster-bootstrap-cli/cluster-bootstrap-cli bootstrap dev \
   --app-path k8s/apps \
   --wait-for-health -v
 ```
@@ -254,7 +254,7 @@ path: {{ if $.Values.repo.basePath }}{{ $.Values.repo.basePath }}/{{ end }}compo
 **Solution:**
 Use the `--base-dir` flag:
 ```bash
-./cli/cluster-bootstrap-cli --base-dir ./k8s bootstrap dev
+./cluster-bootstrap-cli/cluster-bootstrap-cli --base-dir ./k8s bootstrap dev
 ```
 
 ### Error: "app path does not exist"
@@ -268,7 +268,7 @@ The CLI now auto-detects Git subdirectories. Make sure you're using the correct 
 ```bash
 # ✅ From subdirectory - use relative path
 cd /path/to/repo/k8s
-./cli/cluster-bootstrap-cli bootstrap dev --app-path apps
+./cluster-bootstrap-cli/cluster-bootstrap-cli bootstrap dev --app-path apps
 
 # ✅ From root with --base-dir - use full path
 cd /path/to/repo
@@ -294,7 +294,7 @@ kubectl patch application app-of-apps -n argocd --type merge \
   -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'
 
 # Option 2: Re-run bootstrap (idempotent)
-./cli/cluster-bootstrap-cli --base-dir ./k8s bootstrap dev --app-path k8s/apps
+./cluster-bootstrap-cli/cluster-bootstrap-cli --base-dir ./k8s bootstrap dev --app-path k8s/apps
 
 # Option 3: Use ArgoCD UI
 # Navigate to app-of-apps → Click "Refresh" → Select "Hard Refresh"
@@ -318,7 +318,7 @@ cd /path/to/repo
 
 # ✅ Option 2: From subdirectory (auto-detected)
 cd /path/to/repo/k8s
-./cli/cluster-bootstrap-cli bootstrap dev --app-path apps
+./cluster-bootstrap-cli/cluster-bootstrap-cli bootstrap dev --app-path apps
 ```
 
 ### How Auto-Detection Works

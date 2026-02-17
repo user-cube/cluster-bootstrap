@@ -1,7 +1,7 @@
 # validate
 
 ```bash
-./cli/cluster-bootstrap-cli validate <environment>
+cluster-bootstrap-cli validate <environment>
 ```
 
 Validates local configuration, secrets, and optional cluster access. This is a deeper check than `doctor`.
@@ -41,17 +41,17 @@ Validates local configuration, secrets, and optional cluster access. This is a d
 
 ```bash
 # Default checks (SOPS)
-./cli/cluster-bootstrap-cli validate dev
+cluster-bootstrap-cli validate dev
 
 # git-crypt checks
-./cli/cluster-bootstrap-cli validate dev --encryption git-crypt
+cluster-bootstrap-cli validate dev --encryption git-crypt
 
 # Skip cluster checks
-./cli/cluster-bootstrap-cli validate dev --skip-cluster-check
+cluster-bootstrap-cli validate dev --skip-cluster-check
 
 # Skip repo checks
-./cli/cluster-bootstrap-cli validate dev --skip-repo-check
+cluster-bootstrap-cli validate dev --skip-repo-check
 
 # Use a specific kubeconfig and context
-./cli/cluster-bootstrap-cli validate dev --kubeconfig ~/.kube/my-config --context my-cluster
+cluster-bootstrap-cli validate dev --kubeconfig ~/.kube/my-config --context my-cluster
 ```

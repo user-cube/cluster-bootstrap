@@ -10,8 +10,16 @@ Before bootstrapping a cluster, ensure the following tools are installed.
 | `helm` | Helm package manager | [Install Helm](https://helm.sh/docs/intro/install/) |
 | `sops` | Encrypted secrets management | [Install SOPS](https://github.com/getsops/sops) |
 | `age` | Encryption tool (used by SOPS) | [Install age](https://github.com/FiloSottile/age) |
-| `go` | Required to build the CLI tool | [Install Go](https://go.dev/doc/install) (1.25+) |
-| `task` | Task runner for CLI development | [Install Task](https://taskfile.dev/installation/) |
+| `go` | To install/build the CLI tool | [Install Go](https://go.dev/doc/install) (1.25+) |
+
+## Development Tools (optional)
+
+Only needed if building from source or contributing:
+
+| Tool | Purpose | Installation |
+|------|---------|-------------|
+| `task` | Task runner for development | [Install Task](https://taskfile.dev/installation/) |
+| `pre-commit` | Git hooks for code quality | [Install pre-commit](https://pre-commit.com/) |
 
 ## Cluster Access
 

@@ -16,7 +16,7 @@ secrets/
 .vscode/
 
 # Binaries
-cli/cluster-bootstrap
+cluster-bootstrap-cli/cluster-bootstrap-cli
 
 # Sops
 age-key.txt

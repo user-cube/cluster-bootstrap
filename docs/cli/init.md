@@ -1,7 +1,7 @@
 # init
 
 ```bash
-./cli/cluster-bootstrap-cli init
+cluster-bootstrap-cli init
 ```
 
 Interactive setup to configure encryption and create per-environment secrets files.

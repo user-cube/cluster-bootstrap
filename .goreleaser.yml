@@ -4,11 +4,11 @@ project_name: cluster-bootstrap-cli
 
 before:
   hooks:
-    - sh -c 'cd cli && go mod tidy'
+    - sh -c 'cd cluster-bootstrap-cli && go mod tidy'
 
 builds:
   - main: ./main.go
-    dir: cli
+    dir: cluster-bootstrap-cli
     binary: cluster-bootstrap-cli
     env:
       - CGO_ENABLED=0

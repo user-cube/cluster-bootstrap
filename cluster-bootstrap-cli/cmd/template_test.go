@@ -483,7 +483,7 @@ func TestEndToEnd_Customization(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create cli/go.mod
-	goModContent := `module github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli
+	goModContent := `module github.com/user-cube/cluster-bootstrap/cli
 
 go 1.25.0
 `
@@ -494,7 +494,7 @@ go 1.25.0
 	goFileContent := `package cmd
 
 import (
-	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/config"
+	"github.com/user-cube/cluster-bootstrap/cli/internal/config"
 )
 `
 	err = os.WriteFile(filepath.Join(cmdDir, "test.go"), []byte(goFileContent), 0644)

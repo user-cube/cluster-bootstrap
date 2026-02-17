@@ -2,8 +2,8 @@ version: "3"
 
 includes:
   cli:
-    taskfile: cli/Taskfile.yml
-    dir: cli
+    taskfile: cluster-bootstrap-cli/Taskfile.yml
+    dir: cluster-bootstrap-cli
 
 tasks:
   build:
@@ -13,7 +13,7 @@ tasks:
 
   install:
     desc: Install the CLI globally as 'cluster-bootstrap-cli'
-    dir: cli
+    dir: cluster-bootstrap-cli
     cmds:
       - go install
       - |
@@ -22,13 +22,13 @@ tasks:
 
   test:
     desc: Run Go tests with coverage
-    dir: cli
+    dir: cluster-bootstrap-cli
     cmds:
       - go test -cover ./...
 
   lint:
     desc: Run golangci-lint on the CLI
-    dir: cli
+    dir: cluster-bootstrap-cli
     cmds:
       - golangci-lint run ./...
 

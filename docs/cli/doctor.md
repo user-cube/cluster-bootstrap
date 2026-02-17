@@ -1,7 +1,7 @@
 # doctor
 
 ```bash
-./cli/cluster-bootstrap-cli doctor
+cluster-bootstrap-cli doctor
 ```
 
 Checks local tooling and optionally validates cluster access.
@@ -28,14 +28,14 @@ Checks local tooling and optionally validates cluster access.
 
 ```bash
 # Default checks (SOPS)
-./cli/cluster-bootstrap-cli doctor
+cluster-bootstrap-cli doctor
 
 # git-crypt checks
-./cli/cluster-bootstrap-cli doctor --encryption git-crypt
+cluster-bootstrap-cli doctor --encryption git-crypt
 
 # Skip cluster checks (tooling only)
-./cli/cluster-bootstrap-cli doctor --skip-cluster-check
+cluster-bootstrap-cli doctor --skip-cluster-check
 
 # Use a specific kubeconfig and context
-./cli/cluster-bootstrap-cli doctor --kubeconfig ~/.kube/my-config --context my-cluster
+cluster-bootstrap-cli doctor --kubeconfig ~/.kube/my-config --context my-cluster
 ```

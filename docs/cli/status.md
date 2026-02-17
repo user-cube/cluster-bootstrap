@@ -1,7 +1,7 @@
 # status
 
 ```bash
-./cli/cluster-bootstrap-cli status <environment>
+cluster-bootstrap-cli status <environment>
 ```
 
 Shows cluster status and component information. This is an alias of the `info` command.
@@ -27,11 +27,11 @@ Shows cluster status and component information. This is an alias of the `info` c
 
 ```bash
 # Basic status
-./cli/cluster-bootstrap-cli status dev
+cluster-bootstrap-cli status dev
 
 # Include health checks
-./cli/cluster-bootstrap-cli status dev --wait-for-health
+cluster-bootstrap-cli status dev --wait-for-health
 
 # Use a specific kubeconfig and context
-./cli/cluster-bootstrap-cli status dev --kubeconfig ~/.kube/my-config --context my-cluster
+cluster-bootstrap-cli status dev --kubeconfig ~/.kube/my-config --context my-cluster
 ```

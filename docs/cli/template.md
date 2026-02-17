@@ -5,8 +5,10 @@ The `template customize` command allows you to personalize the cluster-bootstrap
 ## Usage
 
 ```bash
-./cli/cluster-bootstrap-cli template customize --org <organization> --repo <repository> [flags]
+cluster-bootstrap-cli template customize --org <organization> --repo <repository> [flags]
 ```
+
+> **Note**: If you haven't installed the CLI globally yet, use `cluster-bootstrap-cli` instead. See [Installation](index.md#installation).
 
 ## What It Does
 
@@ -33,7 +35,7 @@ This command replaces template placeholders throughout the codebase:
 Replace the default `user-cube/cluster-bootstrap` with your organization and repository:
 
 ```bash
-./cli/cluster-bootstrap-cli template customize --org mycompany --repo k8s-gitops
+cluster-bootstrap-cli template customize --org mycompany --repo k8s-gitops
 ```
 
 ### Custom App Path
@@ -41,7 +43,7 @@ Replace the default `user-cube/cluster-bootstrap` with your organization and rep
 If your App of Apps lives in a different directory:
 
 ```bash
-./cli/cluster-bootstrap-cli template customize \
+cluster-bootstrap-cli template customize \
   --org mycompany \
   --repo k8s-gitops \
   --app-path kubernetes/apps
@@ -52,7 +54,7 @@ If your App of Apps lives in a different directory:
 Preview what would be changed without modifying files:
 
 ```bash
-./cli/cluster-bootstrap-cli template customize \
+cluster-bootstrap-cli template customize \
   --org mycompany \
   --repo k8s-gitops \
   --dry-run
@@ -63,7 +65,7 @@ Preview what would be changed without modifying files:
 Skip the interactive confirmation prompt:
 
 ```bash
-./cli/cluster-bootstrap-cli template customize \
+cluster-bootstrap-cli template customize \
   --org mycompany \
   --repo k8s-gitops \
   --force
@@ -132,7 +134,7 @@ Updated 22 file(s)
 
 Next steps:
   1. Review the changes: git diff
-  2. Test the CLI: cd cli && go test ./...
+  2. Test the CLI: cd cluster-bootstrap-cli && go test ./...
   3. Update your Git remote: git remote set-url origin git@github.com:mycompany/k8s-gitops.git
   4. Commit the changes: git add -A && git commit -m 'Customize template'
 ```
@@ -159,7 +161,7 @@ Next steps:
 The command is idempotent - it detects if the template is already customized with the provided values:
 
 ```bash
-$ ./cli/cluster-bootstrap-cli template customize --org mycompany --repo k8s-gitops
+$ cluster-bootstrap-cli template customize --org mycompany --repo k8s-gitops
 ✅ Template already customized with org=mycompany repo=k8s-gitops
    Use --force to re-apply customization
 ```
@@ -181,7 +183,7 @@ After customizing the template:
 1. **Review changes**: Use `git diff` to verify all replacements
 2. **Test the CLI**: Run the test suite to ensure everything works
    ```bash
-   cd cli && go test ./...
+   cd cluster-bootstrap-cli && go test ./...
    ```
 3. **Update Git remote**: Point to your new repository
    ```bash
@@ -209,7 +211,7 @@ Make sure you're running the command from either:
 
 If `go mod tidy` fails after customization:
 ```bash
-cd cli
+cd cluster-bootstrap-cli
 go mod tidy
 ```
 

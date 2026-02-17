@@ -16,14 +16,14 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: cli
+        working-directory: cluster-bootstrap-cli
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-go@v6
         with:
-          go-version-file: cli/go.mod
-          cache-dependency-path: cli/go.sum
+          go-version-file: cluster-bootstrap-cli/go.mod
+          cache-dependency-path: cluster-bootstrap-cli/go.sum
 
       - name: Run tests
         run: go test -race -coverprofile=coverage.out ./...
@@ -32,7 +32,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: coverage
-          path: cli/coverage.out
+          path: cluster-bootstrap-cli/coverage.out
 
   lint:
     if: github.repository == 'user-cube/cluster-bootstrap'
@@ -40,18 +40,18 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: cli
+        working-directory: cluster-bootstrap-cli
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-go@v6
         with:
-          go-version-file: cli/go.mod
-          cache-dependency-path: cli/go.sum
+          go-version-file: cluster-bootstrap-cli/go.mod
+          cache-dependency-path: cluster-bootstrap-cli/go.sum
 
       - uses: golangci/golangci-lint-action@v9
         with:
-          working-directory: cli
+          working-directory: cluster-bootstrap-cli
 
   security:
     if: github.repository == 'user-cube/cluster-bootstrap'
@@ -59,14 +59,14 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: cli
+        working-directory: cluster-bootstrap-cli
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-go@v6
         with:
-          go-version-file: cli/go.mod
-          cache-dependency-path: cli/go.sum
+          go-version-file: cluster-bootstrap-cli/go.mod
+          cache-dependency-path: cluster-bootstrap-cli/go.sum
 
       - name: Download Go dependencies
         run: go mod download
@@ -81,7 +81,7 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
-          scan-ref: cli
+          scan-ref: cluster-bootstrap-cli
           exit-code: 1
           severity: HIGH,CRITICAL
 

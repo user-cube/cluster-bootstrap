@@ -36,51 +36,48 @@ Online documentation available at [Cluster Boostrap Docs](https://user-cube.gith
 Replace the default `user-cube/cluster-bootstrap` with your organization and repository:
 
 ```bash
-./cli/cluster-bootstrap-cli template customize --org mycompany --repo k8s-gitops
+./cluster-bootstrap-cli/cluster-bootstrap-cli template customize --org mycompany --repo k8s-gitops
 ```
 
 This updates Git URLs, GitHub badges, Go module paths, and documentation throughout the codebase. See [Template documentation](docs/cli/template.md) for details.
 
 ### 2. Install the CLI
 
-**Option A: Build locally**
-```bash
-task build
-# Binary will be at: cli/cluster-bootstrap-cli
-```
-
-**Option B: Install globally with `go install`**
+**Option A: Install globally with `go install` (recommended)**
 ```bash
 # From local source
-go install ./cli
+go install ./cluster-bootstrap-cli
 
-# Or directly from GitHub
+# Or from GitHub
 go install github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli@latest
 
 # Verify installation
 cluster-bootstrap-cli --help
+```
 
-# Now you can use it from anywhere:
-cd /path/to/any/project
-cluster-bootstrap-cli bootstrap dev
+**Option B: Build locally**
+```bash
+task build
+# Binary will be at: cluster-bootstrap-cli/cluster-bootstrap-cli
+./cluster-bootstrap-cli/cluster-bootstrap-cli --help
 ```
 
 **Option C: Use task helper**
 ```bash
 task install
-# Automatically installs and shows path
+# Builds and installs to $(go env GOPATH)/bin
 ```
 
 ### 3. Initialize secrets
 
 ```bash
-./cli/cluster-bootstrap-cli init
+./cluster-bootstrap-cli/cluster-bootstrap-cli init
 ```
 
 ### 4. Bootstrap the cluster
 
 ```bash
-./cli/cluster-bootstrap-cli bootstrap dev
+./cluster-bootstrap-cli/cluster-bootstrap-cli bootstrap dev
 ```
 
 This will:
@@ -98,13 +95,13 @@ The bootstrap command generates comprehensive reports with timing metrics, resou
 
 ```bash
 # Default: Human-readable summary report
-./cli/cluster-bootstrap bootstrap dev
+./cluster-bootstrap-cli/cluster-bootstrap bootstrap dev
 
 # JSON report for automation/metrics collection
-./cli/cluster-bootstrap bootstrap dev --report-format json
+./cluster-bootstrap-cli/cluster-bootstrap bootstrap dev --report-format json
 
 # Save report to file
-./cli/cluster-bootstrap bootstrap dev --report-output bootstrap-report.json
+./cluster-bootstrap-cli/cluster-bootstrap bootstrap dev --report-output bootstrap-report.json
 ```
 
 See [Bootstrap Reports documentation](docs/cli/bootstrap.md#bootstrap-reports) for details.
@@ -112,8 +109,8 @@ See [Bootstrap Reports documentation](docs/cli/bootstrap.md#bootstrap-reports) f
 #### Using git-crypt instead of SOPS
 
 ```bash
-./cli/cluster-bootstrap init --provider git-crypt
-./cli/cluster-bootstrap bootstrap dev --encryption git-crypt
+./cluster-bootstrap-cli/cluster-bootstrap init --provider git-crypt
+./cluster-bootstrap-cli/cluster-bootstrap bootstrap dev --encryption git-crypt
 ```
 
 #### Repo content in a subdirectory
@@ -140,10 +137,10 @@ Or from inside the subdirectory (both work):
 cd k8s
 
 # Relative path
-./cli/cluster-bootstrap bootstrap dev --app-path apps --wait-for-health -v
+./cluster-bootstrap-cli/cluster-bootstrap bootstrap dev --app-path apps --wait-for-health -v
 
 # Or full path
-./cli/cluster-bootstrap bootstrap dev --app-path k8s/apps --wait-for-health -v
+./cluster-bootstrap-cli/cluster-bootstrap bootstrap dev --app-path k8s/apps --wait-for-health -v
 ```
 
 **Key points:**
@@ -243,13 +240,13 @@ cp secrets.example.enc.yaml secrets.myenv.enc.yaml
 sops --encrypt --in-place secrets.myenv.enc.yaml
 ```
 
-Or use the CLI interactively: `./cli/cluster-bootstrap init myenv`
+Or use the CLI interactively: `./cluster-bootstrap-cli/cluster-bootstrap init myenv`
 
 **git-crypt:** Secrets are stored as plaintext YAML (`secrets.<env>.yaml`) and encrypted transparently by git-crypt on commit:
 
 ```bash
 git-crypt init
-./cli/cluster-bootstrap init --provider git-crypt myenv
+./cluster-bootstrap-cli/cluster-bootstrap init --provider git-crypt myenv
 ```
 
 To use a custom `.sops.yaml` path, set `SOPS_CONFIG` in your `.env`:
