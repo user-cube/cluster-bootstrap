@@ -20,6 +20,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
+      - -X github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/cmd.Version={{.Version}}
+      - -X github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/cmd.Commit={{.FullCommit}}
+      - -X github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/cmd.Date={{.Date}}
 
 archives:
   - formats:
