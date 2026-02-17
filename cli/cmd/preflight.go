@@ -30,7 +30,7 @@ func CheckKubectlClusterAccess() error {
 	if err != nil {
 		return fmt.Errorf("kubectl not found in PATH: %w", err)
 	}
-	cmd := exec.Command(path, "cluster-info") //nolint:gosec // safe: path validated by exec.LookPath
+	cmd := exec.Command(path, "cluster-info") // #nosec G204
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("cannot connect to cluster: %w\n  output: %s\n  hint: verify kubeconfig is set correctly and cluster is accessible", err, string(output))
@@ -44,7 +44,7 @@ func CheckHelm() error {
 	if err != nil {
 		return fmt.Errorf("helm not found in PATH: %w\n  hint: ensure helm is installed and in your PATH\n  tip: install from https://helm.sh/docs/intro/install/", err)
 	}
-	cmd := exec.Command(path, "version", "--short") //nolint:gosec // safe: path validated by exec.LookPath
+	cmd := exec.Command(path, "version", "--short") // #nosec G204
 	err = cmd.Run()
 	if err != nil {
 		return fmt.Errorf("helm found at %s but failed to run: %w\n  hint: verify helm is properly configured", path, err)
@@ -62,7 +62,7 @@ func CheckSOPS(encryptionBackend string) error {
 	if err != nil {
 		return fmt.Errorf("sops not found in PATH: %w\n  hint: ensure sops is installed and in your PATH\n  tip: install from https://github.com/mozilla/sops", err)
 	}
-	cmd := exec.Command(path, "--version") //nolint:gosec // safe: path validated by exec.LookPath
+	cmd := exec.Command(path, "--version") // #nosec G204
 	err = cmd.Run()
 	if err != nil {
 		return fmt.Errorf("sops found at %s but failed to run: %w", path, err)
@@ -82,7 +82,7 @@ func CheckAge(encryptionBackend string, ageKeyFile string) error {
 		return fmt.Errorf("age not found in PATH: %w\n  hint: ensure age is installed and in your PATH\n  tip: install from https://github.com/FiloSottile/age", err)
 	}
 
-	cmd := exec.Command(path, "--version") //nolint:gosec // safe: path validated by exec.LookPath
+	cmd := exec.Command(path, "--version") // #nosec G204
 	err = cmd.Run()
 	if err != nil {
 		return fmt.Errorf("age found at %s but failed to run: %w", path, err)
@@ -107,7 +107,7 @@ func CheckGitCrypt(encryptionBackend string) error {
 		return fmt.Errorf("git-crypt not found in PATH: %w\n  hint: ensure git-crypt is installed and in your PATH\n  tip: install from https://github.com/AGWA/git-crypt", err)
 	}
 
-	cmd := exec.Command(path, "--version") //nolint:gosec // safe: path validated by exec.LookPath
+	cmd := exec.Command(path, "--version") // #nosec G204
 	err = cmd.Run()
 	if err != nil {
 		return fmt.Errorf("git-crypt found at %s but failed to run: %w", path, err)

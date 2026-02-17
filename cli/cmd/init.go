@@ -276,7 +276,7 @@ func getProviderKey(provider string) (string, error) {
 	switch provider {
 	case "age":
 		if ageKeyFile != "" {
-			data, err := os.ReadFile(ageKeyFile) //nolint:gosec // safe: user-provided age key file from flag
+			data, err := os.ReadFile(ageKeyFile) // #nosec G304
 			if err != nil {
 				return "", fmt.Errorf("failed to read age key file: %w", err)
 			}
@@ -355,7 +355,7 @@ func promptEnvironmentSecrets(env string) (*config.EnvironmentSecrets, error) {
 	}
 
 	// Read SSH key from filesystem
-	sshKeyData, err := os.ReadFile(sshKeyPath) //nolint:gosec // safe: user-provided SSH key from flag
+	sshKeyData, err := os.ReadFile(sshKeyPath) // #nosec G304
 	if err != nil {
 		return nil, fmt.Errorf("failed to read SSH key at %s: %w", sshKeyPath, err)
 	}

@@ -45,7 +45,7 @@ type chartFile struct {
 // chart name, version, and repository URL.
 func loadChartConfig(baseDir, dependencyName string) (name, version, repoURL string, err error) {
 	chartPath := filepath.Join(baseDir, "components/argocd/Chart.yaml")
-	data, err := os.ReadFile(chartPath) //nolint:gosec // safe: filepath constructed with fixed baseDir
+	data, err := os.ReadFile(chartPath) // #nosec G304
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to read %s: %w", chartPath, err)
 	}

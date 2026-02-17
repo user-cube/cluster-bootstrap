@@ -94,7 +94,7 @@ func runVaultToken(cmd *cobra.Command, args []string) error {
 }
 
 func readVaultToken() (string, error) {
-	stdinIsTerminal := term.IsTerminal(int(os.Stdin.Fd()))
+	stdinIsTerminal := term.IsTerminal(int(os.Stdin.Fd())) // #nosec G115
 	if !stdinIsTerminal {
 		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
@@ -108,7 +108,7 @@ func readVaultToken() (string, error) {
 	}
 
 	fmt.Fprint(os.Stderr, "Vault root token: ")
-	bytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+	bytes, err := term.ReadPassword(int(os.Stdin.Fd())) // #nosec G115
 	fmt.Fprintln(os.Stderr)
 	if err != nil {
 		return "", fmt.Errorf("failed to read vault token from prompt: %w", err)
