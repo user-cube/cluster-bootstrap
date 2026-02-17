@@ -1,3 +1,10 @@
+## [1.5.2](https://github.com/user-cube/cluster-bootstrap/compare/v1.5.1...v1.5.2) (2026-02-17)
+
+
+### Bug Fixes
+
+* fix tests ([8446d7a](https://github.com/user-cube/cluster-bootstrap/commit/8446d7a29c4121776dd459840142dcd4b53ea274))
+
 ## [1.5.1](https://github.com/user-cube/cluster-bootstrap/compare/v1.5.0...v1.5.1) (2026-02-17)
 
 
