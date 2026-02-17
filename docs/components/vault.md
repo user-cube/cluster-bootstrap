@@ -52,6 +52,8 @@ HA mode with Raft storage backend. Auto-unseal is enabled via the auto-unseal Jo
 
 ```bash
 ./cli/cluster-bootstrap vault-token --token <root-token>
+echo "<root-token>" | ./cli/cluster-bootstrap vault-token
+./cli/cluster-bootstrap vault-token
 ```
 
 ## Files

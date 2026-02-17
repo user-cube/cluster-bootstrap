@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -25,6 +26,7 @@ import (
 const (
 	argoCDNamespace = "argocd"
 	argoCDRelease   = "argocd"
+	argoCDChartDep  = "argo-cd"
 )
 
 // chartDependency represents a single entry in Chart.yaml dependencies.
@@ -39,11 +41,11 @@ type chartFile struct {
 	Dependencies []chartDependency `yaml:"dependencies"`
 }
 
-// loadChartConfig reads components/argocd/Chart.yaml and returns the first dependency's
+// loadChartConfig reads components/argocd/Chart.yaml and returns the named dependency's
 // chart name, version, and repository URL.
-func loadChartConfig(baseDir string) (name, version, repoURL string, err error) {
+func loadChartConfig(baseDir, dependencyName string) (name, version, repoURL string, err error) {
 	chartPath := filepath.Join(baseDir, "components/argocd/Chart.yaml")
-	data, err := os.ReadFile(chartPath)
+	data, err := os.ReadFile(chartPath) // #nosec G304
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to read %s: %w", chartPath, err)
 	}
@@ -57,13 +59,21 @@ func loadChartConfig(baseDir string) (name, version, repoURL string, err error) 
 		return "", "", "", fmt.Errorf("no dependencies found in %s", chartPath)
 	}
 
-	dep := cf.Dependencies[0]
-	return dep.Name, dep.Version, dep.Repository, nil
+	var depNames []string
+	for _, dep := range cf.Dependencies {
+		depNames = append(depNames, dep.Name)
+		if dep.Name == dependencyName {
+			return dep.Name, dep.Version, dep.Repository, nil
+		}
+	}
+
+	return "", "", "", fmt.Errorf("dependency %s not found in %s (found: %s)", dependencyName, chartPath, strings.Join(depNames, ", "))
 }
 
 // InstallArgoCD installs or upgrades ArgoCD using the Helm SDK.
 // It loads values from components/argocd/values/base.yaml and values/<env>.yaml,
 // then runs helm upgrade --install with --wait.
+// Returns helpful error messages for common failure scenarios.
 func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir string, verbose bool) error {
 	settings := cli.New()
 	settings.SetNamespace(argoCDNamespace)
@@ -86,21 +96,21 @@ func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir st
 	}
 
 	// Read chart name, version and repo from components/argocd/Chart.yaml
-	chartName, chartVersion, repoURL, err := loadChartConfig(baseDir)
+	chartName, chartVersion, repoURL, err := loadChartConfig(baseDir, argoCDChartDep)
 	if err != nil {
-		return fmt.Errorf("failed to load chart config: %w", err)
+		return fmt.Errorf("failed to load chart config: %w\n  hint: ensure components/argocd/Chart.yaml exists and has the argo-cd dependency defined", err)
 	}
 
 	// Download the chart
 	chartPath, err := fetchChart(settings, chartName, chartVersion, repoURL, verbose)
 	if err != nil {
-		return fmt.Errorf("failed to fetch chart: %w", err)
+		return fmt.Errorf("%w\n  hint: verify the Helm repository is accessible and the chart version exists\n  tip: try: helm repo add argo https://argoproj.github.io/argo-helm && helm repo update", err)
 	}
 
 	// Load the chart
 	chart, err := loader.Load(chartPath)
 	if err != nil {
-		return fmt.Errorf("failed to load chart: %w", err)
+		return fmt.Errorf("failed to load chart: %w\n  hint: verify the downloaded chart is not corrupted", err)
 	}
 
 	// Load and merge values
@@ -129,7 +139,16 @@ func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir st
 
 		rel, err := install.RunWithContext(ctx, chart, vals)
 		if err != nil {
-			return fmt.Errorf("failed to install ArgoCD: %w", err)
+			errMsg := err.Error()
+			hint := "verify ArgoCD is not already installed and chart values are valid"
+			if strings.Contains(errMsg, "timeout") {
+				hint = "Helm install timed out. Check cluster resources and pod status: kubectl get pods -n argocd -w"
+			} else if strings.Contains(errMsg, "permission denied") || strings.Contains(errMsg, "Forbidden") {
+				hint = "permission denied. Verify your cluster role permissions to create resources in the argocd namespace"
+			} else if strings.Contains(errMsg, "imagePull") || strings.Contains(errMsg, "ErrImagePull") {
+				hint = "image pull failed. Verify container images are accessible and image pull secrets are configured"
+			}
+			return fmt.Errorf("failed to install ArgoCD: %w\n  hint: %s", err, hint)
 		}
 		if verbose {
 			fmt.Printf("  Release %s installed, status: %s\n", rel.Name, rel.Info.Status)
@@ -144,7 +163,14 @@ func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir st
 
 	rel, err := upgrade.RunWithContext(ctx, argoCDRelease, chart, vals)
 	if err != nil {
-		return fmt.Errorf("failed to upgrade ArgoCD: %w", err)
+		errMsg := err.Error()
+		hint := "verify ArgoCD release configuration and chart values"
+		if strings.Contains(errMsg, "timeout") {
+			hint = "Helm upgrade timed out. Check pod status: kubectl rollout status deploy/argocd-server -n argocd"
+		} else if strings.Contains(errMsg, "permission denied") || strings.Contains(errMsg, "Forbidden") {
+			hint = "permission denied. Verify your cluster role permissions to upgrade resources in the argocd namespace"
+		}
+		return fmt.Errorf("failed to upgrade ArgoCD: %w\n  hint: %s", err, hint)
 	}
 
 	if verbose {
@@ -167,28 +193,36 @@ func fetchChart(settings *cli.EnvSettings, chartName, chartVersion, repoURL stri
 		return "", fmt.Errorf("failed to create chart repository: %w", err)
 	}
 
-	// Download the repo index
-	_, err = chartRepo.DownloadIndexFile()
-	if err != nil {
-		return "", fmt.Errorf("failed to download repo index: %w", err)
+	const maxAttempts = 3
+	var chartPath string
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		// Download the repo index
+		_, err = chartRepo.DownloadIndexFile()
+		if err != nil {
+			lastErr = fmt.Errorf("failed to download repo index: %w", err)
+		} else {
+			// Locate/download the chart
+			chartPathOpts := action.ChartPathOptions{
+				RepoURL: repoURL,
+				Version: chartVersion,
+			}
+			chartPath, err = chartPathOpts.LocateChart(chartName, settings)
+			if err == nil {
+				if verbose {
+					fmt.Printf("  Downloaded chart %s-%s to %s\n", chartName, chartVersion, chartPath)
+				}
+				return chartPath, nil
+			}
+			lastErr = fmt.Errorf("failed to locate chart: %w", err)
+		}
+
+		if attempt < maxAttempts {
+			time.Sleep(time.Duration(attempt) * time.Second)
+		}
 	}
 
-	// Locate/download the chart
-	chartPathOpts := action.ChartPathOptions{
-		RepoURL: repoURL,
-		Version: chartVersion,
-	}
-
-	chartPath, err := chartPathOpts.LocateChart(chartName, settings)
-	if err != nil {
-		return "", fmt.Errorf("failed to locate chart: %w", err)
-	}
-
-	if verbose {
-		fmt.Printf("  Downloaded chart %s-%s to %s\n", chartName, chartVersion, chartPath)
-	}
-
-	return chartPath, nil
+	return "", fmt.Errorf("failed to fetch chart from %s after %d attempts: %w", repoURL, maxAttempts, lastErr)
 }
 
 // loadValues reads base.yaml and the environment-specific values file, then merges them.
@@ -210,7 +244,7 @@ func loadValues(baseDir, env string) (map[string]interface{}, error) {
 	}
 
 	// Merge: env values override base values
-	merged := chartutil.MergeTables(envVals.AsMap(), baseVals.AsMap())
+	merged := chartutil.MergeTables(baseVals.AsMap(), envVals.AsMap())
 	return merged, nil
 }
 

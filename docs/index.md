@@ -16,21 +16,30 @@ This repo provides a fully automated, reproducible way to bootstrap a Kubernetes
 
 ## Components
 
-| Component | Namespace | Sync Wave | Purpose |
-|-----------|-----------|-----------|---------|
-| ArgoCD | `argocd` | 0 | GitOps controller (self-managed) |
-| Vault | `vault` | 1 | Secrets engine |
-| External Secrets | `external-secrets` | 1 | Syncs secrets from Vault to Kubernetes |
-| Prometheus Operator CRDs | `monitoring` | 2 | CRDs for monitoring stack |
-| ArgoCD Repo Secret | `argocd` | 2 | Git repository credentials via ExternalSecret |
-| Reloader | `reloader` | 2 | Restarts workloads on config changes |
-| Kube Prometheus Stack | `monitoring` | 3 | Prometheus monitoring |
-| Trivy Operator | `trivy-system` | 3 | Vulnerability scanning |
+| Component | Namespace | Sync Wave | Purpose | Optional |
+|-----------|-----------|-----------|---------|----------|
+| ArgoCD | `argocd` | 0 | GitOps controller (self-managed) | No |
+| Vault | `vault` | 1 | Secrets engine | Yes* |
+| External Secrets | `external-secrets` | 1 | Syncs secrets from Vault/AWS to Kubernetes | Yes* |
+| Prometheus Operator CRDs | `monitoring` | 2 | CRDs for monitoring stack | Yes |
+| ArgoCD Repo Secret | `argocd` | 2 | Git repository credentials (configurable backend**) | Yes* |
+| Reloader | `reloader` | 2 | Restarts workloads on config changes | Yes |
+| Kube Prometheus Stack | `monitoring` | 3 | Prometheus monitoring | Yes |
+| Trivy Operator | `trivy-system` | 3 | Vulnerability scanning | Yes |
+
+\* **Secrets Backend**: Choose one approach:
+- **No backend** — bootstrap CLI creates the secret directly (simplest)
+- **Vault** — centralized secrets storage with External Secrets syncing (recommended for enterprise)
+- **AWS Secrets Manager** — AWS-native secrets management (recommended for AWS organizations)
+
+\** See [Secret Backends](guides/secret-backends.md) for configuration options.
 
 ## Quick Links
 
 - [Prerequisites](getting-started/prerequisites.md) — what you need before starting
 - [Quick Start](getting-started/quick-start.md) — bootstrap a cluster in minutes
+- [Troubleshooting](guides/troubleshooting.md) — common issues and solutions
+- [Secret Backends](guides/secret-backends.md) — Vault, AWS Secrets Manager, or none
 - [Architecture](architecture/overview.md) — how the App of Apps pattern works
 - [Adding a Component](guides/adding-a-component.md) — extend the stack with new components
 - [Secrets Management](guides/secrets-management.md) — how encrypted secrets flow through the system

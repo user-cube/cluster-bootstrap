@@ -1,6 +1,9 @@
-provider: vault
+# Backend: "none" (bootstrap creates secret), "vault", "aws-secrets", "sealed-secrets"
+# If "none", the component is disabled - bootstrap creates the secret directly
+backend: vault
 
 vault:
+  address: http://vault.vault.svc:8200
   kvPath: secret
   kvVersion: "v2"
   authType: kubernetes
@@ -13,7 +16,14 @@ aws:
   region: eu-west-1
   authSecret: aws-credentials
 
+sealedSecrets:
+  namespace: sealed-secrets
+  # SealedSecrets don't use SecretStore - they're encrypted locally
+  # Reference the sealed secret name below
+
 externalSecret:
   refreshInterval: 1h
+  repoUrl: ""  # Will be set by app values
   vaultSecretPath: argocd/repo-ssh-key
   awsSecretName: argocd/repo-ssh-key
+  sealedSecretsName: repo-ssh-key-sealed

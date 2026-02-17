@@ -177,6 +177,8 @@ kubectl exec -n vault vault-0 -- vault operator init
 
 # Store the root token
 ./cli/cluster-bootstrap vault-token --token <root-token>
+echo "<root-token>" | ./cli/cluster-bootstrap vault-token
+./cli/cluster-bootstrap vault-token
 ```
 
 ## External Secrets Operator

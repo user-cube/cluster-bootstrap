@@ -7,7 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/sops"
+	"github.com/user-cube/cluster-bootstrap/cli/internal/sops"
 )
 
 // gitCryptMagic is the magic header written by git-crypt to encrypted files.
@@ -55,7 +55,7 @@ func LoadSecrets(filePath string, sopsOpts *sops.Options) (*EnvironmentSecrets, 
 // It returns an error if the file still contains the git-crypt magic header,
 // which means it has not been decrypted (git-crypt unlock has not been run).
 func LoadSecretsPlaintext(filePath string) (*EnvironmentSecrets, error) {
-	data, err := os.ReadFile(filePath)
+	data, err := os.ReadFile(filePath) // #nosec G304
 	if err != nil {
 		return nil, fmt.Errorf("failed to read secrets file: %w", err)
 	}

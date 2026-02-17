@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -66,7 +67,13 @@ func (c *Client) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, en
 		ctx, "app-of-apps", app, metav1.ApplyOptions{FieldManager: "cluster-bootstrap"},
 	)
 	if err != nil {
-		return "", fmt.Errorf("failed to apply App of Apps: %w", err)
+		if apierrors.IsForbidden(err) {
+			return "", fmt.Errorf("permission denied: cannot apply Application CRD: %w\n  hint: verify ArgoCD CRDs are installed and your role has permission to apply them\n  tip: check: kubectl api-resources | grep Application", err)
+		}
+		if apierrors.IsNotFound(err) {
+			return "", fmt.Errorf("ArgoCD CRD not found: %w\n  hint: ensure ArgoCD is installed before creating Applications\n  tip: try: kubectl get crd applications.argoproj.io", err)
+		}
+		return "", fmt.Errorf("failed to apply App of Apps: %w\n  hint: verify the Application CR is valid and ArgoCD is running", err)
 	}
 
 	return "", nil

@@ -70,12 +70,33 @@ This performs the following steps:
 # Dry run — print manifests without applying
 ./cli/cluster-bootstrap bootstrap dev --dry-run
 
+# Dry run — write manifests to a file
+./cli/cluster-bootstrap bootstrap dev --dry-run --dry-run-output /tmp/bootstrap.json
+
 # Skip ArgoCD Helm install (if already installed)
 ./cli/cluster-bootstrap bootstrap dev --skip-argocd-install
 
 # Repo content in a subdirectory with custom app path
 ./cli/cluster-bootstrap --base-dir ./k8s bootstrap dev --app-path k8s/apps
+
+# Wait for components to be ready after bootstrap
+./cli/cluster-bootstrap bootstrap dev --wait-for-health
+
+# Wait for health with longer timeout (5 minutes)
+./cli/cluster-bootstrap bootstrap dev --wait-for-health --health-timeout 300
 ```
+
+Note: when using `--secrets-file` or the auto-detected secrets path, the file must already exist.
+
+### Waiting for components to be ready
+
+Use `--wait-for-health` to verify that critical components (ArgoCD, Vault, External Secrets) are ready after bootstrap completes:
+
+```bash
+./cli/cluster-bootstrap bootstrap dev --wait-for-health
+```
+
+This will poll the cluster every 2 seconds for up to 180 seconds (3 minutes) and display a health status report showing which components are ready.
 
 ## 4. Access ArgoCD
 
@@ -99,6 +120,8 @@ For staging and production, after Vault initializes you need to store the root t
 
 ```bash
 ./cli/cluster-bootstrap vault-token --token <vault-root-token>
+echo "<vault-root-token>" | ./cli/cluster-bootstrap vault-token
+./cli/cluster-bootstrap vault-token
 ```
 
 This creates a `vault-root-token` Secret in the `vault` namespace, which the Vault configuration and seed jobs use.

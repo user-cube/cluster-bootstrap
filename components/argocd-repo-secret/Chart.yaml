@@ -1,5 +1,5 @@
 apiVersion: v2
 name: argocd-repo-secret
-description: ExternalSecret that manages the ArgoCD SSH repo credentials via Vault
+description: Manages ArgoCD SSH repo credentials - supports Vault, AWS Secrets Manager, or bootstrap-created secret
 version: 1.0.0
 type: application

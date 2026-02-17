@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/k8s"
+	"github.com/user-cube/cluster-bootstrap/cli/internal/k8s"
 )
 
 var gitCryptKeyFile string
@@ -31,7 +31,7 @@ func init() {
 }
 
 func runGitCryptKey(cmd *cobra.Command, args []string) error {
-	keyData, err := os.ReadFile(gitCryptKeyFile)
+	keyData, err := os.ReadFile(gitCryptKeyFile) // #nosec G304
 	if err != nil {
 		return fmt.Errorf("failed to read key file %s: %w", gitCryptKeyFile, err)
 	}

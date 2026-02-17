@@ -22,7 +22,7 @@ type CreationRule struct {
 
 // ReadSopsConfig reads and parses an existing .sops.yaml file.
 func ReadSopsConfig(path string) (*SOPSConfig, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", path, err)
 	}
@@ -89,7 +89,7 @@ func UpsertSopsRule(outputPath, provider, key, envName string) error {
 		return fmt.Errorf("failed to marshal SOPS config: %w", err)
 	}
 
-	if err := os.WriteFile(outputPath, data, 0644); err != nil {
+	if err := os.WriteFile(outputPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write %s: %w", outputPath, err)
 	}
 
@@ -122,7 +122,7 @@ func WriteSopsConfig(outputPath, provider, key string) error {
 		return fmt.Errorf("failed to marshal SOPS config: %w", err)
 	}
 
-	if err := os.WriteFile(outputPath, data, 0644); err != nil {
+	if err := os.WriteFile(outputPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write %s: %w", outputPath, err)
 	}
 

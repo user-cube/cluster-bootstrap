@@ -2,68 +2,15 @@ package sops
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
+	sopslib "github.com/getsops/sops/v3"
+	"github.com/getsops/sops/v3/gcpkms"
+	"github.com/getsops/sops/v3/kms"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestParseAgeRecipientFromConfig(t *testing.T) {
-	tests := []struct {
-		name      string
-		input     string
-		want      string
-		wantErr   bool
-		errSubstr string
-	}{
-		{
-			name: "standard format",
-			input: `creation_rules:
-  - path_regex: secrets\.dev\.enc\.yaml$
-    age: age1wj3m2ayk4a8nwxc8r678l06q4h4xxa0gqa2l6eyqf037wcdgxaqqla9fr8`,
-			want: "age1wj3m2ayk4a8nwxc8r678l06q4h4xxa0gqa2l6eyqf037wcdgxaqqla9fr8",
-		},
-		{
-			name: "with double quotes",
-			input: `creation_rules:
-  - path_regex: secrets\.dev\.enc\.yaml$
-    age: "age1quoted000000000000000000000000000000000000000000000000000000"`,
-			want: "age1quoted000000000000000000000000000000000000000000000000000000",
-		},
-		{
-			name: "with single quotes",
-			input: `creation_rules:
-  - path_regex: secrets\.dev\.enc\.yaml$
-    age: 'age1single000000000000000000000000000000000000000000000000000000'`,
-			want: "age1single000000000000000000000000000000000000000000000000000000",
-		},
-		{
-			name:      "no age key",
-			input:     `creation_rules:\n  - kms: arn:aws:kms:us-east-1:123456789:key/test`,
-			wantErr:   true,
-			errSubstr: "no age recipient found",
-		},
-		{
-			name:      "empty config",
-			input:     ``,
-			wantErr:   true,
-			errSubstr: "no age recipient found",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseAgeRecipientFromConfig([]byte(tt.input))
-			if tt.wantErr {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.errSubstr)
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
 
 func TestSetAgeEnv(t *testing.T) {
 	t.Run("nil options does nothing", func(t *testing.T) {
@@ -121,4 +68,40 @@ func TestSetAgeEnv(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, "original-value", val)
 	})
+}
+
+func TestLoadEncryptionConfig_KMSAndGCP(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".sops.yaml")
+	config := `creation_rules:
+  - path_regex: secrets\.dev\.enc\.yaml$
+    kms: arn:aws:kms:us-east-1:123456789:key/test
+  - path_regex: secrets\.gcp\.enc\.yaml$
+    gcp_kms: projects/p/locations/l/keyRings/r/cryptoKeys/k
+  - path_regex: secrets\.age\.enc\.yaml$
+    age: age1wj3m2ayk4a8nwxc8r678l06q4h4xxa0gqa2l6eyqf037wcdgxaqqla9fr8
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(config), 0644))
+
+	devFile := filepath.Join(tmpDir, "secrets.dev.enc.yaml")
+	gcpFile := filepath.Join(tmpDir, "secrets.gcp.enc.yaml")
+	ageFile := filepath.Join(tmpDir, "secrets.age.enc.yaml")
+
+	devConfig, err := loadEncryptionConfig(devFile)
+	require.NoError(t, err)
+	require.Len(t, devConfig.keyGroups, 1)
+	require.NotEmpty(t, devConfig.keyGroups[0])
+	_, isKMS := devConfig.keyGroups[0][0].(*kms.MasterKey)
+	assert.True(t, isKMS)
+
+	gcpConfig, err := loadEncryptionConfig(gcpFile)
+	require.NoError(t, err)
+	require.Len(t, gcpConfig.keyGroups, 1)
+	require.NotEmpty(t, gcpConfig.keyGroups[0])
+	_, isGCP := gcpConfig.keyGroups[0][0].(*gcpkms.MasterKey)
+	assert.True(t, isGCP)
+
+	ageConfig, err := loadEncryptionConfig(ageFile)
+	require.NoError(t, err)
+	assert.Equal(t, sopslib.DefaultUnencryptedSuffix, ageConfig.unencryptedSuffix)
 }
