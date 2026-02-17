@@ -133,7 +133,7 @@ The `apps/` chart uses a **single dynamic template** that iterates over a `compo
 
 | Command | Description |
 |---------|-------------|
-| `bootstrap <env>` | Full cluster bootstrap (decrypt secrets, install ArgoCD, deploy App of Apps) |
+| `bootstrap <env>` | Full cluster bootstrap (decrypt secrets, install ArgoCD, deploy App of Apps). Generates comprehensive reports with timing metrics and resource operations. Fully idempotent. |
 | `doctor` | Run prerequisite checks for tooling and cluster access |
 | `status <env>` | Show cluster status and component information |
 | `validate <env>` | Validate local config, secrets, and optional cluster access |
