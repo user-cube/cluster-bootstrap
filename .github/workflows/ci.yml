@@ -71,10 +71,11 @@ jobs:
       - name: Download Go dependencies
         run: go mod download
 
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@latest
+
       - name: Run gosec
-        uses: securego/gosec@master
-        with:
-          args: -exclude-dir=vendor ./cli/...
+        run: gosec -exclude-dir=vendor ./...
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
