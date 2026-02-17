@@ -273,6 +273,11 @@ func applyReplacement(workspaceRoot string, r replacement, dryRun bool) (int, er
 		// Replace
 		newContent := strings.ReplaceAll(originalContent, r.pattern, r.replace)
 
+		// Skip if content unchanged (idempotence)
+		if newContent == originalContent {
+			continue
+		}
+
 		if dryRun {
 			fmt.Printf("  [DRY RUN] Would update: %s\n", relPath)
 			changedCount++

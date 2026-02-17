@@ -109,7 +109,7 @@ func (m *MockClient) CreateGitCryptKeySecret(ctx context.Context, keyData []byte
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
-			"key": keyData,
+			"git-crypt-key": keyData,
 		},
 	}
 

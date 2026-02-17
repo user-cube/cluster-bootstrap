@@ -129,7 +129,7 @@ func TestBootstrapIntegration_GitCryptKey(t *testing.T) {
 	secret := mockClient.GetSecret("argocd", "git-crypt-key")
 	assert.NotNil(t, secret)
 	assert.Equal(t, "git-crypt-key", secret.Name)
-	assert.Equal(t, keyData, secret.Data["key"])
+	assert.Equal(t, keyData, secret.Data["git-crypt-key"])
 }
 
 // TestBootstrapIntegration_SequentialErrors tests recovery by retrying after errors.

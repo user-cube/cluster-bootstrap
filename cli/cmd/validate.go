@@ -273,7 +273,7 @@ func validateRepoAccess(secrets *config.EnvironmentSecrets) validateResult {
 	ctx, cancel := contextWithTimeout(validateRepoTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, path, "ls-remote", "--exit-code", secrets.Repo.URL, ref) // #nosec G204
+	cmd := exec.CommandContext(ctx, path, "ls-remote", "--exit-code", "--", secrets.Repo.URL, ref) // #nosec G204
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return validateResult{name: "repo access", err: fmt.Errorf("git ls-remote failed: %w\n  output: %s", err, string(output))}
@@ -325,7 +325,7 @@ func validateSSHRepoAccess(secrets *config.EnvironmentSecrets) validateResult {
 	ctx, cancel := contextWithTimeout(validateRepoTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, path, "ls-remote", "--exit-code", repoURL, ref) // #nosec G204
+	cmd := exec.CommandContext(ctx, path, "ls-remote", "--exit-code", "--", repoURL, ref) // #nosec G204
 	cmd.Env = append(os.Environ(), fmt.Sprintf("GIT_SSH_COMMAND=ssh -i %q -o BatchMode=yes -o StrictHostKeyChecking=yes", keyFile.Name()))
 	output, err := cmd.CombinedOutput()
 	if err != nil {

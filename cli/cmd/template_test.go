@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -296,6 +297,66 @@ func TestApplyReplacement_NonExistentFile(t *testing.T) {
 	count, err := applyReplacement(tmpDir, r, false)
 	require.NoError(t, err)
 	assert.Equal(t, 0, count) // Should skip non-existent files gracefully
+}
+
+func TestApplyReplacement_Idempotence(t *testing.T) {
+	// Test that applying the same replacement twice doesn't change the file
+	tmpDir := t.TempDir()
+
+	// Create test file with old pattern
+	testFile := filepath.Join(tmpDir, "test.yaml")
+	originalContent := `repoUrl: git@github.com:old-org/old-repo.git
+otherField: value
+`
+	err := os.WriteFile(testFile, []byte(originalContent), 0644)
+	require.NoError(t, err)
+
+	r := replacement{
+		name:    "Repository URLs",
+		pattern: "git@github.com:old-org/old-repo.git",
+		replace: "git@github.com:myorg/myrepo.git",
+		files:   []string{"test.yaml"},
+	}
+
+	// First run: pattern matches, replacement made
+	count, err := applyReplacement(tmpDir, r, false)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count, "First run should update the file")
+
+	// Verify content changed
+	content, err := os.ReadFile(testFile)
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "myorg/myrepo")
+	assert.NotContains(t, string(content), "old-org/old-repo")
+
+	// Get file info after first change
+	info1, err := os.Stat(testFile)
+	require.NoError(t, err)
+
+	// Sleep to ensure we can detect modification time changes
+	time.Sleep(10 * time.Millisecond)
+
+	// Second run with same replacement: should detect no change needed
+	r2 := replacement{
+		name:    "Repository URLs",
+		pattern: "git@github.com:myorg/myrepo.git",
+		replace: "git@github.com:myorg/myrepo.git", // Same as pattern - no-op
+		files:   []string{"test.yaml"},
+	}
+
+	count, err = applyReplacement(tmpDir, r2, false)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count, "Second run should not update when content unchanged")
+
+	// Verify content unchanged
+	newContent, err := os.ReadFile(testFile)
+	require.NoError(t, err)
+	assert.Equal(t, string(content), string(newContent), "Content should remain unchanged")
+
+	// Verify file modification time didn't change
+	info2, err := os.Stat(testFile)
+	require.NoError(t, err)
+	assert.Equal(t, info1.ModTime(), info2.ModTime(), "File should not be modified when content unchanged")
 }
 
 func TestListGoFiles(t *testing.T) {
