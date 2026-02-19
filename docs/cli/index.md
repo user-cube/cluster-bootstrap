@@ -4,7 +4,13 @@ The `cluster-bootstrap-cli` automates cluster bootstrapping. Built in Go with [C
 
 ## Installation
 
-### Using `go install` (recommended)
+### Homebrew (recommended)
+
+```bash
+brew install user-cube/tap/cluster-bootstrap-cli
+```
+
+### Using `go install`
 
 **From local source:**
 

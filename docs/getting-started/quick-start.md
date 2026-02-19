@@ -4,7 +4,13 @@ This guide walks through bootstrapping a cluster from scratch.
 
 ## 1. Install the CLI
 
-**Option A: Install globally with `go install` (recommended)**
+**Option A: Homebrew (recommended)**
+
+```bash
+brew install user-cube/tap/cluster-bootstrap-cli
+```
+
+**Option B: Install globally with `go install`**
 
 ```bash
 # From GitHub
@@ -14,7 +20,7 @@ go install github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli@latest
 cluster-bootstrap-cli --help
 ```
 
-**Option B: Install from local source**
+**Option C: Install from local source**
 
 ```bash
 # Clone the repository
@@ -25,7 +31,7 @@ cd cluster-bootstrap
 go install ./cluster-bootstrap-cli
 ```
 
-**Option C: Build locally**
+**Option D: Build locally**
 
 ```bash
 task build

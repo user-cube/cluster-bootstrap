@@ -35,6 +35,20 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
+brews:
+  - repository:
+      owner: user-cube
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/user-cube/cluster-bootstrap"
+    description: "CLI tool to bootstrap Kubernetes clusters"
+    license: "Apache-2.0"
+    install: |
+      bin.install "cluster-bootstrap-cli"
+    test: |
+      system "#{bin}/cluster-bootstrap-cli", "version"
+
 changelog:
   sort: asc
   filters:
