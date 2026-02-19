@@ -10,8 +10,31 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      cli: ${{ steps.filter.outputs.cli }}
+      helm: ${{ steps.filter.outputs.helm }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            cli:
+              - 'cluster-bootstrap-cli/**'
+            helm:
+              - 'apps/**'
+              - 'components/**'
+            workflows:
+              - '.github/workflows/**'
+
   test:
-    if: github.repository == 'user-cube/cluster-bootstrap'
+    needs: [changes]
+    if: github.repository == 'user-cube/cluster-bootstrap' && needs.changes.outputs.cli == 'true'
     name: Go Tests
     runs-on: ubuntu-latest
     defaults:
@@ -35,7 +58,8 @@ jobs:
           path: cluster-bootstrap-cli/coverage.out
 
   lint:
-    if: github.repository == 'user-cube/cluster-bootstrap'
+    needs: [changes]
+    if: github.repository == 'user-cube/cluster-bootstrap' && needs.changes.outputs.cli == 'true'
     name: Go Lint
     runs-on: ubuntu-latest
     defaults:
@@ -54,7 +78,8 @@ jobs:
           working-directory: cluster-bootstrap-cli
 
   security:
-    if: github.repository == 'user-cube/cluster-bootstrap'
+    needs: [changes]
+    if: github.repository == 'user-cube/cluster-bootstrap' && needs.changes.outputs.cli == 'true'
     name: Security Scan
     runs-on: ubuntu-latest
     defaults:
@@ -98,6 +123,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   helm-lint:
+    needs: [changes]
+    if: needs.changes.outputs.helm == 'true'
     name: Helm Lint
     runs-on: ubuntu-latest
     steps:
@@ -121,6 +148,8 @@ jobs:
           done
 
   helm-validate:
+    needs: [changes]
+    if: needs.changes.outputs.helm == 'true'
     name: Helm Validate Values
     runs-on: ubuntu-latest
     strategy:
@@ -153,3 +182,13 @@ jobs:
               helm template "$chart" -f "$base" -f "$env_file"
             fi
           done
+
+  actionlint:
+    needs: [changes]
+    if: needs.changes.outputs.workflows == 'true'
+    name: Workflow Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: reviewdog/action-actionlint@v1
