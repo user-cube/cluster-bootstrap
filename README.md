@@ -68,6 +68,12 @@ task install
 # Builds and installs to $(go env GOPATH)/bin
 ```
 
+**Option D: Use Docker**
+```bash
+# Use the pre-built image from GHCR
+docker run --rm -v $(pwd):/work -v ~/.kube:/root/.kube ghcr.io/user-cube/cluster-bootstrap-cli:latest bootstrap dev
+```
+
 ### 3. Initialize secrets
 
 ```bash

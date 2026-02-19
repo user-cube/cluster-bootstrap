@@ -70,12 +70,20 @@ func loadChartConfig(baseDir, dependencyName string) (name, version, repoURL str
 	return "", "", "", fmt.Errorf("dependency %s not found in %s (found: %s)", dependencyName, chartPath, strings.Join(depNames, ", "))
 }
 
+// Client implements ClientInterface.
+type Client struct{}
+
+// NewClient creates a new Helm client.
+func NewClient() *Client {
+	return &Client{}
+}
+
 // InstallArgoCD installs or upgrades ArgoCD using the Helm SDK.
 // It loads values from components/argocd/values/base.yaml and values/<env>.yaml,
 // then runs helm upgrade --install with --wait.
 // Returns helpful error messages for common failure scenarios.
 // Returns a boolean indicating if it was installed (true) or upgraded (false).
-func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir string, verbose bool) (bool, error) {
+func (c *Client) InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir string, verbose bool) (bool, error) {
 	settings := cli.New()
 	settings.SetNamespace(argoCDNamespace)
 	if kubeconfig != "" {

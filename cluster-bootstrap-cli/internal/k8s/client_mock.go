@@ -180,12 +180,3 @@ func (m *MockClient) GetSecret(namespace, name string) *corev1.Secret {
 func (m *MockClient) GetApplication(name string) *unstructured.Unstructured {
 	return m.Applications[name]
 }
-
-// ClientInterface defines the interface that both Client and MockClient implement.
-// This is useful for testing code that uses a K8s client.
-type ClientInterface interface {
-	EnsureNamespace(ctx context.Context, name string) (bool, error)
-	CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey string, dryRun bool) (*corev1.Secret, bool, error)
-	CreateGitCryptKeySecret(ctx context.Context, keyData []byte) (bool, error)
-	ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, dryRun bool) (string, bool, error)
-}

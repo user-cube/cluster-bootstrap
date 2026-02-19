@@ -69,3 +69,8 @@ tasks:
     desc: Serve MkDocs documentation locally
     cmds:
       - mkdocs serve
+
+  docker-build-local:
+    desc: Build docker images locally using GoReleaser snapshot
+    cmds:
+      - goreleaser build --snapshot --clean --single-target

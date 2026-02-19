@@ -43,3 +43,30 @@ changelog:
       - '^test:'
       - '^ci:'
       - '^chore:'
+
+dockers:
+  - image_templates:
+      - "ghcr.io/user-cube/cluster-bootstrap-cli:{{.Version}}-amd64"
+      - "ghcr.io/user-cube/cluster-bootstrap-cli:latest-amd64"
+    use: docker
+    dockerfile: Dockerfile
+    goos: linux
+    goarch: amd64
+
+  - image_templates:
+      - "ghcr.io/user-cube/cluster-bootstrap-cli:{{.Version}}-arm64"
+      - "ghcr.io/user-cube/cluster-bootstrap-cli:latest-arm64"
+    use: docker
+    dockerfile: Dockerfile
+    goos: linux
+    goarch: arm64
+
+docker_manifests:
+  - name_template: "ghcr.io/user-cube/cluster-bootstrap-cli:{{.Version}}"
+    image_templates:
+      - "ghcr.io/user-cube/cluster-bootstrap-cli:{{.Version}}-amd64"
+      - "ghcr.io/user-cube/cluster-bootstrap-cli:{{.Version}}-arm64"
+  - name_template: "ghcr.io/user-cube/cluster-bootstrap-cli:latest"
+    image_templates:
+      - "ghcr.io/user-cube/cluster-bootstrap-cli:latest-amd64"
+      - "ghcr.io/user-cube/cluster-bootstrap-cli:latest-arm64"

@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/bootstrap"
 	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/config"
 	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/k8s"
 	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/sops"
@@ -199,7 +200,7 @@ func resolveAppPath(base, appPath string) (string, error) {
 	appFullPath := filepath.Join(base, appPath)
 	if _, err := os.Stat(appFullPath); err != nil {
 		if appPath == "apps" {
-			detected, detectErr := autoDetectAppPath(base)
+			detected, detectErr := bootstrap.AutoDetectAppPath(base)
 			if detectErr != nil {
 				return "", fmt.Errorf("app-path %s does not exist under base-dir: %w", appPath, err)
 			}

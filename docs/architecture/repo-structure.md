@@ -20,7 +20,7 @@ cluster-bootstrap/
 │   ├── kube-prometheus-stack/
 │   ├── reloader/
 │   └── trivy-operator/
-├── cli/                           # Go CLI tool
+├── cluster-bootstrap-cli/         # Go CLI tool
 │   ├── main.go
 │   ├── cmd/                       # Cobra commands
 │   ├── internal/                  # Internal packages
