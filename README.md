@@ -43,7 +43,12 @@ This updates Git URLs, GitHub badges, Go module paths, and documentation through
 
 ### 2. Install the CLI
 
-**Option A: Install globally with `go install` (recommended)**
+**Option A: Homebrew (recommended)**
+```bash
+brew install user-cube/tap/cluster-bootstrap-cli
+```
+
+**Option B: Install globally with `go install`**
 ```bash
 # From local source
 go install ./cluster-bootstrap-cli
@@ -55,14 +60,14 @@ go install github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli@latest
 cluster-bootstrap-cli --help
 ```
 
-**Option B: Build locally**
+**Option C: Build locally**
 ```bash
 task build
 # Binary will be at: cluster-bootstrap-cli/cluster-bootstrap-cli
 ./cluster-bootstrap-cli/cluster-bootstrap-cli --help
 ```
 
-**Option C: Use task helper**
+**Option D: Use task helper**
 ```bash
 task install
 # Builds and installs to $(go env GOPATH)/bin
