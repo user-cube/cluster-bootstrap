@@ -32,5 +32,8 @@ venv
 # Node
 node_modules/
 
+# Goreleaser
+dist/*
+
 # Git Crypt
 git-crypt-key
