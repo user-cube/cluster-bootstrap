@@ -1,3 +1,10 @@
+## [1.7.1](https://github.com/user-cube/cluster-bootstrap/compare/v1.7.0...v1.7.1) (2026-02-19)
+
+
+### Bug Fixes
+
+* make goreleaser version static ([#37](https://github.com/user-cube/cluster-bootstrap/issues/37)) ([d595bd8](https://github.com/user-cube/cluster-bootstrap/commit/d595bd865186f5b5392e5cc7052ded97cdf9bba9))
+
 # [1.7.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.6.0...v1.7.0) (2026-02-19)
 
 
