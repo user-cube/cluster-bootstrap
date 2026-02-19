@@ -140,11 +140,11 @@ jobs:
             if grep -q "^dependencies:" "$chart/Chart.yaml"; then
               helm dependency build "$chart"
             fi
-            values_args=""
             if [ -f "$chart/values/base.yaml" ]; then
-              values_args="-f $chart/values/base.yaml"
+              helm lint "$chart" -f "$chart/values/base.yaml"
+            else
+              helm lint "$chart"
             fi
-            helm lint "$chart" $values_args
           done
 
   helm-validate:
