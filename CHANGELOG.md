@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.6.0...v1.7.0) (2026-02-19)
+
+
+### Features
+
+* add homebrew support ([#36](https://github.com/user-cube/cluster-bootstrap/issues/36)) ([0a8e72b](https://github.com/user-cube/cluster-bootstrap/commit/0a8e72b8dc4da4346c2460073d47cc0d1ee730d5))
+
 # [1.6.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.5.2...v1.6.0) (2026-02-17)
 
 
