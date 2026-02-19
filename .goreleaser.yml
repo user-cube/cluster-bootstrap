@@ -43,7 +43,7 @@ brews:
     directory: Formula
     homepage: "https://github.com/user-cube/cluster-bootstrap"
     description: "CLI tool to bootstrap Kubernetes clusters"
-    license: "MIT"
+    license: "Apache-2.0"
     install: |
       bin.install "cluster-bootstrap-cli"
     test: |
