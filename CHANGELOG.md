@@ -1,3 +1,10 @@
+## [1.7.2](https://github.com/user-cube/cluster-bootstrap/compare/v1.7.1...v1.7.2) (2026-02-19)
+
+
+### Bug Fixes
+
+* update goreleaser version ([#38](https://github.com/user-cube/cluster-bootstrap/issues/38)) ([8b025db](https://github.com/user-cube/cluster-bootstrap/commit/8b025db59a055283af369d6a7ce523dff898acaa))
+
 ## [1.7.1](https://github.com/user-cube/cluster-bootstrap/compare/v1.7.0...v1.7.1) (2026-02-19)
 
 
