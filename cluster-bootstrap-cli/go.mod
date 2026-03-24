@@ -3,7 +3,7 @@ module github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli
 go 1.25.0
 
 require (
-	github.com/charmbracelet/huh v0.8.0
+	github.com/charmbracelet/huh/v2 v2.0.3
 	github.com/fatih/color v1.18.0
 	github.com/getsops/sops/v3 v3.11.0
 	github.com/spf13/cobra v1.10.2
