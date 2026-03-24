@@ -75,7 +75,7 @@ jobs:
           cache-dependency-path: cluster-bootstrap-cli/go.sum
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           version: "nightly" # TODO: Update to 2.14 when released, this is a temporary workaround for the homebrew tap format issue
           args: release --clean
