@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.7.3...v1.8.0) (2026-08-29)
+
+
+### Features
+
+* add optional Cilium bootstrap support ([#75](https://github.com/user-cube/cluster-bootstrap/issues/75)) ([f3c050c](https://github.com/user-cube/cluster-bootstrap/commit/f3c050cb85b635814767358798f4e0f71a04b72e))
+
 ## [1.7.3](https://github.com/user-cube/cluster-bootstrap/compare/v1.7.2...v1.7.3) (2026-08-29)
 
 
