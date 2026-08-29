@@ -54,6 +54,61 @@ func TestStoreSopsAgeKeySecretReadErrorIncludesPath(t *testing.T) {
 	assert.ErrorContains(t, err, keyPath)
 }
 
+func TestValidateBootstrapInputs_StoreSopsAgeKey(t *testing.T) {
+	prevBaseDir := baseDir
+	prevAppPath := appPath
+	prevEncryption := encryption
+	prevSecretsFile := secretsFile
+	prevStore := storeSopsAgeKey
+	prevAgeKey := bootstrapAgeKey
+
+	t.Cleanup(func() {
+		baseDir = prevBaseDir
+		appPath = prevAppPath
+		encryption = prevEncryption
+		secretsFile = prevSecretsFile
+		storeSopsAgeKey = prevStore
+		bootstrapAgeKey = prevAgeKey
+	})
+
+	tmpDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "apps"), 0755))
+
+	baseDir = tmpDir
+	appPath = "apps"
+	encryption = "sops"
+	secretsFile = filepath.Join(tmpDir, "secrets.dev.enc.yaml")
+	storeSopsAgeKey = true
+	t.Setenv("SOPS_AGE_KEY_FILE", "")
+
+	bootstrapAgeKey = ""
+	_, err := validateBootstrapInputs("dev", "apps")
+	require.EqualError(t, err, "--store-sops-age-key requires --age-key-file or SOPS_AGE_KEY_FILE")
+
+	encryption = "git-crypt"
+	_, err = validateBootstrapInputs("dev", "apps")
+	require.EqualError(t, err, `--store-sops-age-key requires --encryption sops (got "git-crypt")`)
+	encryption = "sops"
+
+	missing := filepath.Join(tmpDir, "missing-age-key.txt")
+	bootstrapAgeKey = missing
+	_, err = validateBootstrapInputs("dev", "apps")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, missing)
+
+	keyPath := filepath.Join(tmpDir, "age-key.txt")
+	require.NoError(t, os.WriteFile(keyPath, []byte("AGE-SECRET-KEY-1test"), 0o600))
+	bootstrapAgeKey = keyPath
+	_, err = validateBootstrapInputs("dev", "apps")
+	require.NoError(t, err)
+
+	// The env fallback is validated the same way.
+	bootstrapAgeKey = ""
+	t.Setenv("SOPS_AGE_KEY_FILE", keyPath)
+	_, err = validateBootstrapInputs("dev", "apps")
+	require.NoError(t, err)
+}
+
 func TestRunBootstrapComponents_OrderAndGating(t *testing.T) {
 	tests := []struct {
 		name              string

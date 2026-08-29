@@ -163,6 +163,41 @@ func TestCreateSopsAgeKeySecret_Idempotent(t *testing.T) {
 	})
 }
 
+// TestCreateSopsAgeKeySecret_PreservesForeignMetadata verifies that updating an
+// existing secret keeps annotations and data keys owned by other tools (Helm
+// ownership metadata, an extra identity file) instead of clobbering them.
+func TestCreateSopsAgeKeySecret_PreservesForeignMetadata(t *testing.T) {
+	ctx := context.Background()
+	//nolint:staticcheck // SA1019: fake.NewSimpleClientset is deprecated but alternative requires generated apply configs
+	fakeClient := fake.NewSimpleClientset(
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "argocd"}},
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "sops-age-key",
+				Namespace: "argocd",
+				Annotations: map[string]string{
+					"meta.helm.sh/release-name": "argocd",
+				},
+			},
+			Data: map[string][]byte{
+				"age-key.txt": []byte("old-key"),
+				"extra.txt":   []byte("second-identity"),
+			},
+		},
+	)
+
+	created, err := (&Client{Clientset: fakeClient}).CreateSopsAgeKeySecret(ctx, []byte("AGE-SECRET-KEY-1test"))
+	require.NoError(t, err)
+	assert.False(t, created)
+
+	secret, err := fakeClient.CoreV1().Secrets("argocd").Get(ctx, "sops-age-key", metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, []byte("AGE-SECRET-KEY-1test"), secret.Data["age-key.txt"])
+	assert.Equal(t, []byte("second-identity"), secret.Data["extra.txt"])
+	assert.Equal(t, "argocd", secret.Annotations["meta.helm.sh/release-name"])
+	assert.Equal(t, "cluster-bootstrap", secret.Annotations["cluster-bootstrap/managed-by"])
+}
+
 func TestCreateSopsAgeKeySecret_ForbiddenErrorsAreActionable(t *testing.T) {
 	ctx := context.Background()
 	for _, tt := range []struct {

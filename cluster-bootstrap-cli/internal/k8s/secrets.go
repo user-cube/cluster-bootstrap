@@ -9,6 +9,30 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// mergeStringMap copies src over dst, keeping any key dst already holds that
+// src does not manage (e.g. Helm or ArgoCD ownership metadata).
+func mergeStringMap(dst, src map[string]string) map[string]string {
+	if dst == nil {
+		dst = make(map[string]string, len(src))
+	}
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+// mergeByteMap copies src over dst, keeping any key dst already holds that src
+// does not manage (e.g. an extra identity file added by the operator).
+func mergeByteMap(dst, src map[string][]byte) map[string][]byte {
+	if dst == nil {
+		dst = make(map[string][]byte, len(src))
+	}
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
 // EnsureNamespace creates a namespace if it does not already exist.
 func (c *Client) EnsureNamespace(ctx context.Context, name string) (bool, error) {
 	_, err := c.Clientset.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
@@ -85,8 +109,8 @@ func (c *Client) CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey
 		return secret, true, nil
 	}
 
-	existing.Labels = secret.Labels
-	existing.Annotations = secret.Annotations
+	existing.Labels = mergeStringMap(existing.Labels, secret.Labels)
+	existing.Annotations = mergeStringMap(existing.Annotations, secret.Annotations)
 	existing.StringData = secret.StringData
 	// Also update Data field for compatibility with fake clients that don't auto-convert StringData
 	if existing.Data == nil {
@@ -140,8 +164,8 @@ func (c *Client) CreateGitCryptKeySecret(ctx context.Context, keyData []byte) (b
 		return true, nil
 	}
 
-	existing.Annotations = secret.Annotations
-	existing.Data = secret.Data
+	existing.Annotations = mergeStringMap(existing.Annotations, secret.Annotations)
+	existing.Data = mergeByteMap(existing.Data, secret.Data)
 	_, err = c.Clientset.CoreV1().Secrets("argocd").Update(ctx, existing, metav1.UpdateOptions{})
 	if err != nil {
 		return false, fmt.Errorf("failed to update git-crypt-key secret: %w", err)
@@ -190,8 +214,8 @@ func (c *Client) CreateSopsAgeKeySecret(ctx context.Context, keyData []byte) (bo
 		return true, nil
 	}
 
-	existing.Annotations = secret.Annotations
-	existing.Data = secret.Data
+	existing.Annotations = mergeStringMap(existing.Annotations, secret.Annotations)
+	existing.Data = mergeByteMap(existing.Data, secret.Data)
 	_, err = c.Clientset.CoreV1().Secrets("argocd").Update(ctx, existing, metav1.UpdateOptions{})
 	if err != nil {
 		if apierrors.IsForbidden(err) {
