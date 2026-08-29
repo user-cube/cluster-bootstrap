@@ -36,6 +36,10 @@ var (
 	reportOutput      string
 )
 
+type sopsAgeKeySecretCreator interface {
+	CreateSopsAgeKeySecret(ctx context.Context, keyData []byte) (bool, error)
+}
+
 var bootstrapCmd = &cobra.Command{
 	Use:   "bootstrap <environment>",
 	Short: "Bootstrap a Kubernetes cluster with optional Cilium, ArgoCD, and secrets",
@@ -372,29 +376,10 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	// Optionally store the SOPS age identity for ArgoCD repo-server instances
 	// that decrypt SOPS-encrypted Helm values in-cluster.
 	if storeSopsAgeKey {
-		ageKeyPath := bootstrapAgeKey
-		if ageKeyPath == "" {
-			ageKeyPath = os.Getenv("SOPS_AGE_KEY_FILE")
-		}
-		if ageKeyPath == "" {
-			bootstrapErr = fmt.Errorf("--store-sops-age-key requires --age-key-file or SOPS_AGE_KEY_FILE")
-			report.AddStage(secretsK8sTimer.complete(false, bootstrapErr))
-			return bootstrapErr
-		}
-
-		// The path is deliberately provided by the operator through a CLI flag or
-		// SOPS_AGE_KEY_FILE; bootstrap must support age keys stored outside the repo.
-		keyData, err := os.ReadFile(ageKeyPath) // #nosec G304,G703 -- explicit operator-controlled key path
-		if err != nil {
-			bootstrapErr = fmt.Errorf("failed to read SOPS age key file: %w", err)
-			report.AddStage(secretsK8sTimer.complete(false, bootstrapErr))
-			return bootstrapErr
-		}
-
 		stepf("Creating sops-age-key secret...")
-		sopsAgeKeyCreated, err := client.CreateSopsAgeKeySecret(ctx, keyData)
+		sopsAgeKeyCreated, err := storeSopsAgeKeySecret(ctx, client, bootstrapAgeKey)
 		if err != nil {
-			bootstrapErr = err
+			bootstrapErr = fmt.Errorf("failed to create sops-age-key secret: %w", err)
 			report.AddStage(secretsK8sTimer.complete(false, err))
 			return err
 		}
@@ -572,6 +557,28 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func storeSopsAgeKeySecret(ctx context.Context, client sopsAgeKeySecretCreator, ageKeyFile string) (bool, error) {
+	if ageKeyFile == "" {
+		ageKeyFile = os.Getenv("SOPS_AGE_KEY_FILE")
+	}
+	if ageKeyFile == "" {
+		return false, fmt.Errorf("--store-sops-age-key requires --age-key-file or SOPS_AGE_KEY_FILE")
+	}
+
+	// The path is deliberately provided by the operator through a CLI flag or
+	// SOPS_AGE_KEY_FILE; bootstrap must support age keys stored outside the repo.
+	keyData, err := os.ReadFile(ageKeyFile) // #nosec G304,G703 -- explicit operator-controlled key path
+	if err != nil {
+		return false, fmt.Errorf("read SOPS age key file %s: %w", ageKeyFile, err)
+	}
+
+	created, err := client.CreateSopsAgeKeySecret(ctx, keyData)
+	if err != nil {
+		return false, err
+	}
+	return created, nil
 }
 
 func printDryRun(envSecrets *config.EnvironmentSecrets, env, appPath string, ciliumEnabled bool) error {

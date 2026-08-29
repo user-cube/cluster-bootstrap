@@ -175,10 +175,16 @@ func (c *Client) CreateSopsAgeKeySecret(ctx context.Context, keyData []byte) (bo
 	existing, err := c.Clientset.CoreV1().Secrets("argocd").Get(ctx, "sops-age-key", metav1.GetOptions{})
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
+			if apierrors.IsForbidden(err) {
+				return false, fmt.Errorf("permission denied: cannot get sops-age-key secret in argocd namespace: %w\n  hint: verify your cluster role has permission to get secrets", err)
+			}
 			return false, fmt.Errorf("failed to get sops-age-key secret: %w", err)
 		}
 		_, err = c.Clientset.CoreV1().Secrets("argocd").Create(ctx, secret, metav1.CreateOptions{})
 		if err != nil {
+			if apierrors.IsForbidden(err) {
+				return false, fmt.Errorf("permission denied: cannot create sops-age-key secret in argocd namespace: %w\n  hint: verify your cluster role has permission to create secrets", err)
+			}
 			return false, fmt.Errorf("failed to create sops-age-key secret: %w", err)
 		}
 		return true, nil
@@ -188,6 +194,9 @@ func (c *Client) CreateSopsAgeKeySecret(ctx context.Context, keyData []byte) (bo
 	existing.Data = secret.Data
 	_, err = c.Clientset.CoreV1().Secrets("argocd").Update(ctx, existing, metav1.UpdateOptions{})
 	if err != nil {
+		if apierrors.IsForbidden(err) {
+			return false, fmt.Errorf("permission denied: cannot update sops-age-key secret in argocd namespace: %w\n  hint: verify your cluster role has permission to update secrets", err)
+		}
 		return false, fmt.Errorf("failed to update sops-age-key secret: %w", err)
 	}
 	return false, nil

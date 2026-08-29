@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/config"
+	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/k8s"
 )
 
 func TestCiliumFlagIsOptIn(t *testing.T) {
@@ -23,6 +24,34 @@ func TestStoreSopsAgeKeyFlagIsOptIn(t *testing.T) {
 	flag := bootstrapCmd.Flags().Lookup("store-sops-age-key")
 	require.NotNil(t, flag)
 	assert.Equal(t, "false", flag.DefValue)
+}
+
+func TestStoreSopsAgeKeySecret(t *testing.T) {
+	keyPath := filepath.Join(t.TempDir(), "age-key.txt")
+	keyData := []byte("AGE-SECRET-KEY-1test")
+	require.NoError(t, os.WriteFile(keyPath, keyData, 0o600))
+
+	client := k8s.NewMockClient()
+	created, err := storeSopsAgeKeySecret(context.Background(), client, keyPath)
+	require.NoError(t, err)
+	assert.True(t, created)
+
+	secret := client.GetSecret("argocd", "sops-age-key")
+	require.NotNil(t, secret)
+	assert.Equal(t, keyData, secret.Data["age-key.txt"])
+}
+
+func TestStoreSopsAgeKeySecretRequiresKeyPath(t *testing.T) {
+	t.Setenv("SOPS_AGE_KEY_FILE", "")
+	_, err := storeSopsAgeKeySecret(context.Background(), k8s.NewMockClient(), "")
+	require.EqualError(t, err, "--store-sops-age-key requires --age-key-file or SOPS_AGE_KEY_FILE")
+}
+
+func TestStoreSopsAgeKeySecretReadErrorIncludesPath(t *testing.T) {
+	keyPath := filepath.Join(t.TempDir(), "missing-age-key.txt")
+	_, err := storeSopsAgeKeySecret(context.Background(), k8s.NewMockClient(), keyPath)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, keyPath)
 }
 
 func TestRunBootstrapComponents_OrderAndGating(t *testing.T) {
