@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.8.0...v1.9.0) (2026-08-29)
+
+
+### Features
+
+* add --store-sops-age-key flag to allow secret creation ([#76](https://github.com/user-cube/cluster-bootstrap/issues/76)) ([a914a52](https://github.com/user-cube/cluster-bootstrap/commit/a914a522f8fb47fd1b68a7a3f44f693e7c73cce9))
+
 # [1.8.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.7.3...v1.8.0) (2026-08-29)
 
 
