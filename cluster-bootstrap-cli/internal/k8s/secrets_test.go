@@ -119,6 +119,45 @@ func TestCreateGitCryptKeySecret_Idempotent(t *testing.T) {
 	})
 }
 
+func TestCreateSopsAgeKeySecret_Idempotent(t *testing.T) {
+	ctx := context.Background()
+	keyData := []byte("AGE-SECRET-KEY-1test")
+
+	t.Run("creates new secret", func(t *testing.T) {
+		//nolint:staticcheck // SA1019: fake.NewSimpleClientset is deprecated but alternative requires generated apply configs
+		fakeClient := fake.NewSimpleClientset(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "argocd"}})
+		client := &Client{Clientset: fakeClient}
+
+		created, err := client.CreateSopsAgeKeySecret(ctx, keyData)
+		require.NoError(t, err)
+		assert.True(t, created)
+
+		secret, err := fakeClient.CoreV1().Secrets("argocd").Get(ctx, "sops-age-key", metav1.GetOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, keyData, secret.Data["age-key.txt"])
+	})
+
+	t.Run("updates existing secret", func(t *testing.T) {
+		//nolint:staticcheck // SA1019: fake.NewSimpleClientset is deprecated but alternative requires generated apply configs
+		fakeClient := fake.NewSimpleClientset(
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "argocd"}},
+			&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "sops-age-key", Namespace: "argocd"},
+				Data:       map[string][]byte{"age-key.txt": []byte("old-key")},
+			},
+		)
+		client := &Client{Clientset: fakeClient}
+
+		created, err := client.CreateSopsAgeKeySecret(ctx, keyData)
+		require.NoError(t, err)
+		assert.False(t, created)
+
+		secret, err := fakeClient.CoreV1().Secrets("argocd").Get(ctx, "sops-age-key", metav1.GetOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, keyData, secret.Data["age-key.txt"])
+	})
+}
+
 // TestEnsureNamespace_Idempotent verifies namespace creation is idempotent
 func TestEnsureNamespace_Idempotent(t *testing.T) {
 	ctx := context.Background()

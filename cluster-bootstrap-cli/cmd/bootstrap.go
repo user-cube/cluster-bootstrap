@@ -26,6 +26,7 @@ var (
 	kubeconfig        string
 	kubeContext       string
 	bootstrapAgeKey   string
+	storeSopsAgeKey   bool
 	encryption        string
 	gitcryptKeyFile   string
 	appPath           string
@@ -55,6 +56,7 @@ func init() {
 	bootstrapCmd.Flags().StringVar(&kubeconfig, "kubeconfig", "", "path to kubeconfig file")
 	bootstrapCmd.Flags().StringVar(&kubeContext, "context", "", "kubeconfig context to use")
 	bootstrapCmd.Flags().StringVar(&bootstrapAgeKey, "age-key-file", "", "path to age private key file for SOPS decryption")
+	bootstrapCmd.Flags().BoolVar(&storeSopsAgeKey, "store-sops-age-key", false, "store the SOPS age key as the sops-age-key Kubernetes Secret in argocd")
 	bootstrapCmd.Flags().StringVar(&encryption, "encryption", "sops", "encryption backend (sops|git-crypt)")
 	bootstrapCmd.Flags().StringVar(&gitcryptKeyFile, "gitcrypt-key-file", "", "path to git-crypt symmetric key file (creates K8s secret)")
 	bootstrapCmd.Flags().StringVar(&appPath, "app-path", "apps", "path to App of Apps (relative to current dir when in subfolder, or full repo path with --base-dir)")
@@ -364,6 +366,45 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 			secretsK8sStage.SecretDetail("Created", "git-crypt-key", "argocd")
 		} else {
 			secretsK8sStage.SecretDetail("Updated", "git-crypt-key", "argocd")
+		}
+	}
+
+	// Optionally store the SOPS age identity for ArgoCD repo-server instances
+	// that decrypt SOPS-encrypted Helm values in-cluster.
+	if storeSopsAgeKey {
+		ageKeyPath := bootstrapAgeKey
+		if ageKeyPath == "" {
+			ageKeyPath = os.Getenv("SOPS_AGE_KEY_FILE")
+		}
+		if ageKeyPath == "" {
+			bootstrapErr = fmt.Errorf("--store-sops-age-key requires --age-key-file or SOPS_AGE_KEY_FILE")
+			report.AddStage(secretsK8sTimer.complete(false, bootstrapErr))
+			return bootstrapErr
+		}
+
+		keyData, err := os.ReadFile(ageKeyPath) // #nosec G304
+		if err != nil {
+			bootstrapErr = fmt.Errorf("failed to read SOPS age key file: %w", err)
+			report.AddStage(secretsK8sTimer.complete(false, bootstrapErr))
+			return bootstrapErr
+		}
+
+		stepf("Creating sops-age-key secret...")
+		sopsAgeKeyCreated, err := client.CreateSopsAgeKeySecret(ctx, keyData)
+		if err != nil {
+			bootstrapErr = err
+			report.AddStage(secretsK8sTimer.complete(false, err))
+			return err
+		}
+		report.Resources.Secrets = append(report.Resources.Secrets, SecretReport{
+			Name:      "sops-age-key",
+			Namespace: "argocd",
+			Created:   sopsAgeKeyCreated,
+		})
+		if sopsAgeKeyCreated {
+			secretsK8sStage.SecretDetail("Created", "sops-age-key", "argocd")
+		} else {
+			secretsK8sStage.SecretDetail("Updated", "sops-age-key", "argocd")
 		}
 	}
 	secretsK8sStage.Done()

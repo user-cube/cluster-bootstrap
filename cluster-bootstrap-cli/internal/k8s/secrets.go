@@ -148,3 +148,47 @@ func (c *Client) CreateGitCryptKeySecret(ctx context.Context, keyData []byte) (b
 	}
 	return false, nil
 }
+
+// CreateSopsAgeKeySecret creates or updates the sops-age-key secret in the argocd namespace.
+// The key data is mounted by ArgoCD repo-server instances that decrypt SOPS values in-cluster.
+// Returns a boolean indicating if it was created (true) or updated (false).
+func (c *Client) CreateSopsAgeKeySecret(ctx context.Context, keyData []byte) (bool, error) {
+	if _, err := c.EnsureNamespace(ctx, "argocd"); err != nil {
+		return false, err
+	}
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "sops-age-key",
+			Namespace: "argocd",
+			Annotations: map[string]string{
+				"cluster-bootstrap/origin":     "bootstrap",
+				"cluster-bootstrap/managed-by": "cluster-bootstrap",
+			},
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"age-key.txt": keyData,
+		},
+	}
+
+	existing, err := c.Clientset.CoreV1().Secrets("argocd").Get(ctx, "sops-age-key", metav1.GetOptions{})
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return false, fmt.Errorf("failed to get sops-age-key secret: %w", err)
+		}
+		_, err = c.Clientset.CoreV1().Secrets("argocd").Create(ctx, secret, metav1.CreateOptions{})
+		if err != nil {
+			return false, fmt.Errorf("failed to create sops-age-key secret: %w", err)
+		}
+		return true, nil
+	}
+
+	existing.Annotations = secret.Annotations
+	existing.Data = secret.Data
+	_, err = c.Clientset.CoreV1().Secrets("argocd").Update(ctx, existing, metav1.UpdateOptions{})
+	if err != nil {
+		return false, fmt.Errorf("failed to update sops-age-key secret: %w", err)
+	}
+	return false, nil
+}
