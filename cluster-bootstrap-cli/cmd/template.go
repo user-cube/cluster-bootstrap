@@ -255,8 +255,18 @@ type replacement struct {
 func applyReplacement(workspaceRoot string, r replacement, dryRun bool) (int, error) {
 	changedCount := 0
 
+	rootAbs, err := filepath.Abs(workspaceRoot)
+	if err != nil {
+		return changedCount, fmt.Errorf("failed to resolve workspace root: %w", err)
+	}
+
 	for _, relPath := range r.files {
-		filePath := filepath.Join(workspaceRoot, relPath)
+		filePath := filepath.Join(rootAbs, filepath.Clean("/"+relPath))
+
+		// Ensure the resolved path stays inside the workspace root
+		if rel, err := filepath.Rel(rootAbs, filePath); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+			return changedCount, fmt.Errorf("refusing to process path outside workspace: %s", relPath)
+		}
 
 		// Check if file exists
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
@@ -297,7 +307,7 @@ func applyReplacement(workspaceRoot string, r replacement, dryRun bool) (int, er
 		}
 
 		// Write back
-		if err := os.WriteFile(filePath, []byte(newContent), perm); err != nil {
+		if err := os.WriteFile(filePath, []byte(newContent), perm); err != nil { //#nosec G703 -- filePath is validated to stay within workspaceRoot above
 			return changedCount, fmt.Errorf("failed to write %s: %w", relPath, err)
 		}
 
