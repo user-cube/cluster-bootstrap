@@ -11,12 +11,102 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/config"
+	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/k8s"
 )
 
 func TestCiliumFlagIsOptIn(t *testing.T) {
 	flag := bootstrapCmd.Flags().Lookup("enable-cilium")
 	require.NotNil(t, flag)
 	assert.Equal(t, "false", flag.DefValue)
+}
+
+func TestStoreSopsAgeKeyFlagIsOptIn(t *testing.T) {
+	flag := bootstrapCmd.Flags().Lookup("store-sops-age-key")
+	require.NotNil(t, flag)
+	assert.Equal(t, "false", flag.DefValue)
+}
+
+func TestStoreSopsAgeKeySecret(t *testing.T) {
+	keyPath := filepath.Join(t.TempDir(), "age-key.txt")
+	keyData := []byte("AGE-SECRET-KEY-1test")
+	require.NoError(t, os.WriteFile(keyPath, keyData, 0o600))
+
+	client := k8s.NewMockClient()
+	created, err := storeSopsAgeKeySecret(context.Background(), client, keyPath)
+	require.NoError(t, err)
+	assert.True(t, created)
+
+	secret := client.GetSecret("argocd", "sops-age-key")
+	require.NotNil(t, secret)
+	assert.Equal(t, keyData, secret.Data["age-key.txt"])
+}
+
+func TestStoreSopsAgeKeySecretRequiresKeyPath(t *testing.T) {
+	t.Setenv("SOPS_AGE_KEY_FILE", "")
+	_, err := storeSopsAgeKeySecret(context.Background(), k8s.NewMockClient(), "")
+	require.EqualError(t, err, "--store-sops-age-key requires --age-key-file or SOPS_AGE_KEY_FILE")
+}
+
+func TestStoreSopsAgeKeySecretReadErrorIncludesPath(t *testing.T) {
+	keyPath := filepath.Join(t.TempDir(), "missing-age-key.txt")
+	_, err := storeSopsAgeKeySecret(context.Background(), k8s.NewMockClient(), keyPath)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, keyPath)
+}
+
+func TestValidateBootstrapInputs_StoreSopsAgeKey(t *testing.T) {
+	prevBaseDir := baseDir
+	prevAppPath := appPath
+	prevEncryption := encryption
+	prevSecretsFile := secretsFile
+	prevStore := storeSopsAgeKey
+	prevAgeKey := bootstrapAgeKey
+
+	t.Cleanup(func() {
+		baseDir = prevBaseDir
+		appPath = prevAppPath
+		encryption = prevEncryption
+		secretsFile = prevSecretsFile
+		storeSopsAgeKey = prevStore
+		bootstrapAgeKey = prevAgeKey
+	})
+
+	tmpDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "apps"), 0755))
+
+	baseDir = tmpDir
+	appPath = "apps"
+	encryption = "sops"
+	secretsFile = filepath.Join(tmpDir, "secrets.dev.enc.yaml")
+	storeSopsAgeKey = true
+	t.Setenv("SOPS_AGE_KEY_FILE", "")
+
+	bootstrapAgeKey = ""
+	_, err := validateBootstrapInputs("dev", "apps")
+	require.EqualError(t, err, "--store-sops-age-key requires --age-key-file or SOPS_AGE_KEY_FILE")
+
+	encryption = "git-crypt"
+	_, err = validateBootstrapInputs("dev", "apps")
+	require.EqualError(t, err, `--store-sops-age-key requires --encryption sops (got "git-crypt")`)
+	encryption = "sops"
+
+	missing := filepath.Join(tmpDir, "missing-age-key.txt")
+	bootstrapAgeKey = missing
+	_, err = validateBootstrapInputs("dev", "apps")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, missing)
+
+	keyPath := filepath.Join(tmpDir, "age-key.txt")
+	require.NoError(t, os.WriteFile(keyPath, []byte("AGE-SECRET-KEY-1test"), 0o600))
+	bootstrapAgeKey = keyPath
+	_, err = validateBootstrapInputs("dev", "apps")
+	require.NoError(t, err)
+
+	// The env fallback is validated the same way.
+	bootstrapAgeKey = ""
+	t.Setenv("SOPS_AGE_KEY_FILE", keyPath)
+	_, err = validateBootstrapInputs("dev", "apps")
+	require.NoError(t, err)
 }
 
 func TestRunBootstrapComponents_OrderAndGating(t *testing.T) {

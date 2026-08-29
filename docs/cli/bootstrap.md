@@ -15,7 +15,7 @@ cluster-bootstrap-cli bootstrap dev
 1. Loads secrets — decrypts via SOPS (default) or reads plaintext git-crypt files
 2. Creates the `argocd` namespace
 3. Creates the `repo-ssh-key` Secret with Git SSH credentials
-4. Optionally creates `git-crypt-key` Secret (if `--gitcrypt-key-file` provided)
+4. Optionally creates `git-crypt-key` when `--gitcrypt-key-file` is provided, or `sops-age-key` when `--store-sops-age-key` is set
 5. When `--enable-cilium` is set, installs or upgrades Cilium and waits for Helm's workload readiness checks to pass
 6. Installs ArgoCD via Helm (from `components/argocd/`)
 7. Deploys the App of Apps root Application, enabling its repository-backed Cilium Application when requested
@@ -56,7 +56,8 @@ This makes bootstrap safe to re-run after configuration changes, secret updates,
 | `--enable-cilium` | `false` | Install Cilium in `kube-system`, wait until healthy, then configure it for ArgoCD management |
 | `--kubeconfig` | `~/.kube/config` | Path to kubeconfig file |
 | `--context` | current context | Kubeconfig context to use |
-| `--age-key-file` | `SOPS_AGE_KEY_FILE` env | Path to age private key (SOPS only) |
+| `--age-key-file` | `SOPS_AGE_KEY_FILE` env | Path to age private key for SOPS decryption or for `--store-sops-age-key`. |
+| `--store-sops-age-key` | `false` | Store the age private key from `--age-key-file` (or `SOPS_AGE_KEY_FILE`) as `sops-age-key` in `argocd`. Use when ArgoCD decrypts SOPS values in-cluster. Requires `--encryption sops`, and the key path is validated before any cluster change. |
 | `--gitcrypt-key-file` | — | Path to git-crypt symmetric key file. When provided, stores the key as a `git-crypt-key` K8s Secret in the `argocd` namespace |
 | `--app-path` | `apps` | Path inside the Git repo for the App of Apps source (used in the ArgoCD Application CR `spec.source.path`). If `apps` does not exist and no value is provided, the CLI auto-detects a matching chart (Chart.yaml + templates/application.yaml). |
 | `--wait-for-health` | `false` | Wait for cluster components (ArgoCD, Vault, External Secrets) to be ready after bootstrap |
@@ -74,6 +75,11 @@ cluster-bootstrap-cli bootstrap dev
 
 # Bootstrap Cilium before ArgoCD
 cluster-bootstrap-cli bootstrap dev --enable-cilium
+
+# Let ArgoCD decrypt SOPS-encrypted Helm values in-cluster
+cluster-bootstrap-cli bootstrap prod \
+  --age-key-file ./age-key.txt \
+  --store-sops-age-key
 
 # git-crypt
 cluster-bootstrap-cli bootstrap dev --encryption git-crypt

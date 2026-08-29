@@ -9,6 +9,30 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// mergeStringMap copies src over dst, keeping any key dst already holds that
+// src does not manage (e.g. Helm or ArgoCD ownership metadata).
+func mergeStringMap(dst, src map[string]string) map[string]string {
+	if dst == nil {
+		dst = make(map[string]string, len(src))
+	}
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+// mergeByteMap copies src over dst, keeping any key dst already holds that src
+// does not manage (e.g. an extra identity file added by the operator).
+func mergeByteMap(dst, src map[string][]byte) map[string][]byte {
+	if dst == nil {
+		dst = make(map[string][]byte, len(src))
+	}
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
 // EnsureNamespace creates a namespace if it does not already exist.
 func (c *Client) EnsureNamespace(ctx context.Context, name string) (bool, error) {
 	_, err := c.Clientset.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
@@ -85,8 +109,8 @@ func (c *Client) CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey
 		return secret, true, nil
 	}
 
-	existing.Labels = secret.Labels
-	existing.Annotations = secret.Annotations
+	existing.Labels = mergeStringMap(existing.Labels, secret.Labels)
+	existing.Annotations = mergeStringMap(existing.Annotations, secret.Annotations)
 	existing.StringData = secret.StringData
 	// Also update Data field for compatibility with fake clients that don't auto-convert StringData
 	if existing.Data == nil {
@@ -140,11 +164,64 @@ func (c *Client) CreateGitCryptKeySecret(ctx context.Context, keyData []byte) (b
 		return true, nil
 	}
 
-	existing.Annotations = secret.Annotations
-	existing.Data = secret.Data
+	existing.Annotations = mergeStringMap(existing.Annotations, secret.Annotations)
+	existing.Data = mergeByteMap(existing.Data, secret.Data)
 	_, err = c.Clientset.CoreV1().Secrets("argocd").Update(ctx, existing, metav1.UpdateOptions{})
 	if err != nil {
 		return false, fmt.Errorf("failed to update git-crypt-key secret: %w", err)
+	}
+	return false, nil
+}
+
+// CreateSopsAgeKeySecret creates or updates the sops-age-key secret in the argocd namespace.
+// The key data is mounted by ArgoCD repo-server instances that decrypt SOPS values in-cluster.
+// Returns a boolean indicating if it was created (true) or updated (false).
+func (c *Client) CreateSopsAgeKeySecret(ctx context.Context, keyData []byte) (bool, error) {
+	if _, err := c.EnsureNamespace(ctx, "argocd"); err != nil {
+		return false, err
+	}
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "sops-age-key",
+			Namespace: "argocd",
+			Annotations: map[string]string{
+				"cluster-bootstrap/origin":     "bootstrap",
+				"cluster-bootstrap/managed-by": "cluster-bootstrap",
+			},
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"age-key.txt": keyData,
+		},
+	}
+
+	existing, err := c.Clientset.CoreV1().Secrets("argocd").Get(ctx, "sops-age-key", metav1.GetOptions{})
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			if apierrors.IsForbidden(err) {
+				return false, fmt.Errorf("permission denied: cannot get sops-age-key secret in argocd namespace: %w\n  hint: verify your cluster role has permission to get secrets", err)
+			}
+			return false, fmt.Errorf("failed to get sops-age-key secret: %w", err)
+		}
+		_, err = c.Clientset.CoreV1().Secrets("argocd").Create(ctx, secret, metav1.CreateOptions{})
+		if err != nil {
+			if apierrors.IsForbidden(err) {
+				return false, fmt.Errorf("permission denied: cannot create sops-age-key secret in argocd namespace: %w\n  hint: verify your cluster role has permission to create secrets", err)
+			}
+			return false, fmt.Errorf("failed to create sops-age-key secret: %w", err)
+		}
+		return true, nil
+	}
+
+	existing.Annotations = mergeStringMap(existing.Annotations, secret.Annotations)
+	existing.Data = mergeByteMap(existing.Data, secret.Data)
+	_, err = c.Clientset.CoreV1().Secrets("argocd").Update(ctx, existing, metav1.UpdateOptions{})
+	if err != nil {
+		if apierrors.IsForbidden(err) {
+			return false, fmt.Errorf("permission denied: cannot update sops-age-key secret in argocd namespace: %w\n  hint: verify your cluster role has permission to update secrets", err)
+		}
+		return false, fmt.Errorf("failed to update sops-age-key secret: %w", err)
 	}
 	return false, nil
 }

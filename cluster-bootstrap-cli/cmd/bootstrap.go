@@ -26,6 +26,7 @@ var (
 	kubeconfig        string
 	kubeContext       string
 	bootstrapAgeKey   string
+	storeSopsAgeKey   bool
 	encryption        string
 	gitcryptKeyFile   string
 	appPath           string
@@ -34,6 +35,10 @@ var (
 	reportFormat      string
 	reportOutput      string
 )
+
+type sopsAgeKeySecretCreator interface {
+	CreateSopsAgeKeySecret(ctx context.Context, keyData []byte) (bool, error)
+}
 
 var bootstrapCmd = &cobra.Command{
 	Use:   "bootstrap <environment>",
@@ -54,7 +59,8 @@ func init() {
 	bootstrapCmd.Flags().BoolVar(&enableCilium, "enable-cilium", false, "install Cilium before ArgoCD and configure it for ArgoCD management")
 	bootstrapCmd.Flags().StringVar(&kubeconfig, "kubeconfig", "", "path to kubeconfig file")
 	bootstrapCmd.Flags().StringVar(&kubeContext, "context", "", "kubeconfig context to use")
-	bootstrapCmd.Flags().StringVar(&bootstrapAgeKey, "age-key-file", "", "path to age private key file for SOPS decryption")
+	bootstrapCmd.Flags().StringVar(&bootstrapAgeKey, "age-key-file", "", "path to age private key file for SOPS decryption or --store-sops-age-key")
+	bootstrapCmd.Flags().BoolVar(&storeSopsAgeKey, "store-sops-age-key", false, "store the SOPS age key as the sops-age-key Kubernetes Secret in argocd")
 	bootstrapCmd.Flags().StringVar(&encryption, "encryption", "sops", "encryption backend (sops|git-crypt)")
 	bootstrapCmd.Flags().StringVar(&gitcryptKeyFile, "gitcrypt-key-file", "", "path to git-crypt symmetric key file (creates K8s secret)")
 	bootstrapCmd.Flags().StringVar(&appPath, "app-path", "apps", "path to App of Apps (relative to current dir when in subfolder, or full repo path with --base-dir)")
@@ -366,6 +372,28 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 			secretsK8sStage.SecretDetail("Updated", "git-crypt-key", "argocd")
 		}
 	}
+
+	// Optionally store the SOPS age identity for ArgoCD repo-server instances
+	// that decrypt SOPS-encrypted Helm values in-cluster.
+	if storeSopsAgeKey {
+		stepf("Creating sops-age-key secret...")
+		sopsAgeKeyCreated, err := storeSopsAgeKeySecret(ctx, client, bootstrapAgeKey)
+		if err != nil {
+			bootstrapErr = fmt.Errorf("failed to create sops-age-key secret: %w", err)
+			report.AddStage(secretsK8sTimer.complete(false, bootstrapErr))
+			return bootstrapErr
+		}
+		report.Resources.Secrets = append(report.Resources.Secrets, SecretReport{
+			Name:      "sops-age-key",
+			Namespace: "argocd",
+			Created:   sopsAgeKeyCreated,
+		})
+		if sopsAgeKeyCreated {
+			secretsK8sStage.SecretDetail("Created", "sops-age-key", "argocd")
+		} else {
+			secretsK8sStage.SecretDetail("Updated", "sops-age-key", "argocd")
+		}
+	}
 	secretsK8sStage.Done()
 	report.AddStage(secretsK8sTimer.complete(true, nil))
 
@@ -531,6 +559,38 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// resolveSopsAgeKeyPath returns the age key path used by --store-sops-age-key,
+// falling back to SOPS_AGE_KEY_FILE when --age-key-file is not set.
+func resolveSopsAgeKeyPath(ageKeyFile string) (string, error) {
+	if ageKeyFile == "" {
+		ageKeyFile = os.Getenv("SOPS_AGE_KEY_FILE")
+	}
+	if ageKeyFile == "" {
+		return "", fmt.Errorf("--store-sops-age-key requires --age-key-file or SOPS_AGE_KEY_FILE")
+	}
+	return ageKeyFile, nil
+}
+
+func storeSopsAgeKeySecret(ctx context.Context, client sopsAgeKeySecretCreator, ageKeyFile string) (bool, error) {
+	ageKeyFile, err := resolveSopsAgeKeyPath(ageKeyFile)
+	if err != nil {
+		return false, err
+	}
+
+	// The path is deliberately provided by the operator through a CLI flag or
+	// SOPS_AGE_KEY_FILE; bootstrap must support age keys stored outside the repo.
+	keyData, err := os.ReadFile(ageKeyFile) // #nosec G304 G703 -- explicit operator-controlled key path
+	if err != nil {
+		return false, fmt.Errorf("read SOPS age key file %s: %w", ageKeyFile, err)
+	}
+
+	created, err := client.CreateSopsAgeKeySecret(ctx, keyData)
+	if err != nil {
+		return false, err
+	}
+	return created, nil
+}
+
 func printDryRun(envSecrets *config.EnvironmentSecrets, env, appPath string, ciliumEnabled bool) error {
 	output, err := renderDryRunOutputWithOptions(envSecrets, env, appPath, ciliumEnabled)
 	if err != nil {
@@ -690,6 +750,22 @@ func buildDryRunObjectsWithOptions(envSecrets *config.EnvironmentSecrets, env, a
 func validateBootstrapInputs(env string, argoCDAppPath string) (localPath string, err error) {
 	if env == "" {
 		return "", fmt.Errorf("environment is required")
+	}
+
+	// Validate the age key up front: the secret is only written after the argocd
+	// namespace and other secrets exist, so a missing key would abort a
+	// half-applied bootstrap.
+	if storeSopsAgeKey {
+		if encryption != "sops" {
+			return "", fmt.Errorf("--store-sops-age-key requires --encryption sops (got %q)", encryption)
+		}
+		ageKeyPath, keyErr := resolveSopsAgeKeyPath(bootstrapAgeKey)
+		if keyErr != nil {
+			return "", keyErr
+		}
+		if _, keyErr := os.Stat(ageKeyPath); keyErr != nil {
+			return "", fmt.Errorf("age key file for --store-sops-age-key is not accessible: %w\n  hint: verify the path exists and you have read permissions\n  path: %s", keyErr, ageKeyPath)
+		}
 	}
 
 	baseInfo, statErr := os.Stat(baseDir)

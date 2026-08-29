@@ -2,13 +2,18 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 // TestCreateRepoSSHSecret_Idempotent verifies that CreateRepoSSHSecret is idempotent:
@@ -117,6 +122,125 @@ func TestCreateGitCryptKeySecret_Idempotent(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, keyData, updated.Data["git-crypt-key"])
 	})
+}
+
+func TestCreateSopsAgeKeySecret_Idempotent(t *testing.T) {
+	ctx := context.Background()
+	keyData := []byte("AGE-SECRET-KEY-1test")
+
+	t.Run("creates new secret", func(t *testing.T) {
+		//nolint:staticcheck // SA1019: fake.NewSimpleClientset is deprecated but alternative requires generated apply configs
+		fakeClient := fake.NewSimpleClientset(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "argocd"}})
+		client := &Client{Clientset: fakeClient}
+
+		created, err := client.CreateSopsAgeKeySecret(ctx, keyData)
+		require.NoError(t, err)
+		assert.True(t, created)
+
+		secret, err := fakeClient.CoreV1().Secrets("argocd").Get(ctx, "sops-age-key", metav1.GetOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, keyData, secret.Data["age-key.txt"])
+	})
+
+	t.Run("updates existing secret", func(t *testing.T) {
+		//nolint:staticcheck // SA1019: fake.NewSimpleClientset is deprecated but alternative requires generated apply configs
+		fakeClient := fake.NewSimpleClientset(
+			&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "argocd"}},
+			&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "sops-age-key", Namespace: "argocd"},
+				Data:       map[string][]byte{"age-key.txt": []byte("old-key")},
+			},
+		)
+		client := &Client{Clientset: fakeClient}
+
+		created, err := client.CreateSopsAgeKeySecret(ctx, keyData)
+		require.NoError(t, err)
+		assert.False(t, created)
+
+		secret, err := fakeClient.CoreV1().Secrets("argocd").Get(ctx, "sops-age-key", metav1.GetOptions{})
+		require.NoError(t, err)
+		assert.Equal(t, keyData, secret.Data["age-key.txt"])
+	})
+}
+
+// TestCreateSopsAgeKeySecret_PreservesForeignMetadata verifies that updating an
+// existing secret keeps annotations and data keys owned by other tools (Helm
+// ownership metadata, an extra identity file) instead of clobbering them.
+func TestCreateSopsAgeKeySecret_PreservesForeignMetadata(t *testing.T) {
+	ctx := context.Background()
+	//nolint:staticcheck // SA1019: fake.NewSimpleClientset is deprecated but alternative requires generated apply configs
+	fakeClient := fake.NewSimpleClientset(
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "argocd"}},
+		&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "sops-age-key",
+				Namespace: "argocd",
+				Annotations: map[string]string{
+					"meta.helm.sh/release-name": "argocd",
+				},
+			},
+			Data: map[string][]byte{
+				"age-key.txt": []byte("old-key"),
+				"extra.txt":   []byte("second-identity"),
+			},
+		},
+	)
+
+	created, err := (&Client{Clientset: fakeClient}).CreateSopsAgeKeySecret(ctx, []byte("AGE-SECRET-KEY-1test"))
+	require.NoError(t, err)
+	assert.False(t, created)
+
+	secret, err := fakeClient.CoreV1().Secrets("argocd").Get(ctx, "sops-age-key", metav1.GetOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, []byte("AGE-SECRET-KEY-1test"), secret.Data["age-key.txt"])
+	assert.Equal(t, []byte("second-identity"), secret.Data["extra.txt"])
+	assert.Equal(t, "argocd", secret.Annotations["meta.helm.sh/release-name"])
+	assert.Equal(t, "cluster-bootstrap", secret.Annotations["cluster-bootstrap/managed-by"])
+}
+
+func TestCreateSopsAgeKeySecret_ForbiddenErrorsAreActionable(t *testing.T) {
+	ctx := context.Background()
+	for _, tt := range []struct {
+		name         string
+		verb         string
+		objects      []runtime.Object
+		expectedHint string
+	}{
+		{
+			name:         "get",
+			verb:         "get",
+			expectedHint: "permission to get secrets",
+		},
+		{
+			name:         "create",
+			verb:         "create",
+			expectedHint: "permission to create secrets",
+		},
+		{
+			name: "update",
+			verb: "update",
+			objects: []runtime.Object{
+				&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "sops-age-key", Namespace: "argocd"}},
+			},
+			expectedHint: "permission to update secrets",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			objects := append([]runtime.Object{
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "argocd"}},
+			}, tt.objects...)
+			//nolint:staticcheck // SA1019: fake.NewSimpleClientset is deprecated but alternative requires generated apply configs
+			fakeClient := fake.NewSimpleClientset(objects...)
+			fakeClient.PrependReactor(tt.verb, "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+				return true, nil, apierrors.NewForbidden(schema.GroupResource{Resource: "secrets"}, "sops-age-key", errors.New("forbidden"))
+			})
+
+			_, err := (&Client{Clientset: fakeClient}).CreateSopsAgeKeySecret(ctx, []byte("key"))
+			require.Error(t, err)
+			assert.ErrorContains(t, err, "permission denied")
+			assert.ErrorContains(t, err, tt.expectedHint)
+		})
+	}
 }
 
 // TestEnsureNamespace_Idempotent verifies namespace creation is idempotent

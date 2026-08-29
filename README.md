@@ -91,13 +91,23 @@ To bootstrap Cilium as the cluster CNI before ArgoCD, opt in explicitly:
 ./cluster-bootstrap-cli/cluster-bootstrap-cli bootstrap dev --enable-cilium
 ```
 
+If the ArgoCD repo-server uses `helm-secrets` to decrypt SOPS-encrypted values
+from Git, create its `sops-age-key` Secret during bootstrap:
+
+```bash
+./cluster-bootstrap-cli/cluster-bootstrap-cli bootstrap prod \
+  --age-key-file ./age-key.txt \
+  --store-sops-age-key
+```
+
 This will:
 
 1. Decrypt environment secrets (SOPS + age by default, or git-crypt)
 2. Create the `argocd` namespace and SSH credentials secret
-3. Optionally install Cilium and wait for it to become healthy
-4. Install ArgoCD via Helm
-5. Deploy the root **App of Apps** Application, enabling its Cilium child Application when requested
+3. Optionally store the SOPS age key for ArgoCD to decrypt SOPS values in-cluster
+4. Optionally install Cilium and wait for it to become healthy
+5. Install ArgoCD via Helm
+6. Deploy the root **App of Apps** Application, enabling its Cilium child Application when requested
 
 > **💡 Idempotent by design**: The bootstrap command can be safely run multiple times. It automatically detects existing resources and updates them instead of failing. Perfect for configuration updates or GitOps workflows.
 

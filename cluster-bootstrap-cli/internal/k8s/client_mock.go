@@ -21,6 +21,7 @@ type MockClient struct {
 	EnsureNamespaceErr       error
 	CreateRepoSSHSecretErr   error
 	CreateGitCryptKeyErr     error
+	CreateSopsAgeKeyErr      error
 	ApplyAppOfAppsErr        error
 	EnsureNamespaceForbidden bool
 	CreateSecretForbidden    bool
@@ -128,6 +129,31 @@ func (m *MockClient) CreateGitCryptKeySecret(ctx context.Context, keyData []byte
 	return created, nil
 }
 
+// CreateSopsAgeKeySecret simulates SOPS age key secret creation.
+func (m *MockClient) CreateSopsAgeKeySecret(ctx context.Context, keyData []byte) (bool, error) {
+	if m.CreateSopsAgeKeyErr != nil {
+		return false, m.CreateSopsAgeKeyErr
+	}
+	if m.CreateSecretForbidden {
+		return false, fmt.Errorf("permission denied: cannot create secrets in argocd namespace: Forbidden")
+	}
+
+	created := true
+	if m.Secrets["argocd"] != nil {
+		if _, exists := m.Secrets["argocd"]["sops-age-key"]; exists {
+			created = false
+		}
+	} else {
+		m.Secrets["argocd"] = make(map[string]*corev1.Secret)
+	}
+	m.Secrets["argocd"]["sops-age-key"] = &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "sops-age-key", Namespace: "argocd"},
+		Type:       corev1.SecretTypeOpaque,
+		Data:       map[string][]byte{"age-key.txt": keyData},
+	}
+	return created, nil
+}
+
 // ApplyAppOfApps simulates Application CR creation.
 func (m *MockClient) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, enableCilium, dryRun bool) (string, bool, error) {
 	if m.ApplyAppOfAppsErr != nil {
@@ -171,5 +197,6 @@ type ClientInterface interface {
 	EnsureNamespace(ctx context.Context, name string) (bool, error)
 	CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey string, dryRun bool) (*corev1.Secret, bool, error)
 	CreateGitCryptKeySecret(ctx context.Context, keyData []byte) (bool, error)
+	CreateSopsAgeKeySecret(ctx context.Context, keyData []byte) (bool, error)
 	ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, enableCilium, dryRun bool) (string, bool, error)
 }
