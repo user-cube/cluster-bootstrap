@@ -70,6 +70,7 @@ type ApplicationReport struct {
 	Name      string `json:"name"`
 	Namespace string `json:"namespace"`
 	Created   bool   `json:"created"` // true = created, false = updated
+	ManagedBy string `json:"managed_by,omitempty"`
 }
 
 // HealthReport captures post-bootstrap health check results.
@@ -197,7 +198,11 @@ func (r *BootstrapReport) PrintSummary() {
 	}
 
 	if r.Resources.CiliumApplication != nil {
-		fmt.Printf("  Application:   %s (%s)\n", r.Resources.CiliumApplication.Name, statusText(r.Resources.CiliumApplication.Created, "created", "updated"))
+		if r.Resources.CiliumApplication.ManagedBy != "" {
+			fmt.Printf("  Application:   %s (managed by %s)\n", r.Resources.CiliumApplication.Name, r.Resources.CiliumApplication.ManagedBy)
+		} else {
+			fmt.Printf("  Application:   %s (%s)\n", r.Resources.CiliumApplication.Name, statusText(r.Resources.CiliumApplication.Created, "created", "updated"))
+		}
 	}
 	fmt.Printf("  Application:   %s (%s)\n", r.Resources.AppOfApps.Name, statusText(r.Resources.AppOfApps.Created, "created", "updated"))
 

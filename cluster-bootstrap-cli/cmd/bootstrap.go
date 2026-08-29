@@ -6,14 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
-
 	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/config"
 	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/helm"
 	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/k8s"
@@ -182,18 +179,11 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		report.AddStage(validationTimer.complete(false, err))
 		return bootstrapErr
 	}
-	var ciliumAppPath string
 	if enableCilium {
 		if err := validateCiliumEnvironment(env); err != nil {
 			bootstrapErr = err
 			report.AddStage(validationTimer.complete(false, err))
 			return err
-		}
-		ciliumAppPath, err = resolveCiliumComponentPath(baseDir, localAppPath)
-		if err != nil {
-			bootstrapErr = fmt.Errorf("failed to resolve Cilium repository path: %w", err)
-			report.AddStage(validationTimer.complete(false, bootstrapErr))
-			return bootstrapErr
 		}
 	}
 	report.AddStage(validationTimer.complete(true, nil))
@@ -224,7 +214,6 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	}
 	if enableCilium {
 		configStage.Detail("Cilium: enabled")
-		configStage.Detail("Cilium repository path: %s", ciliumAppPath)
 	}
 	configStage.Done()
 
@@ -295,7 +284,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	}
 
 	if dryRun {
-		bootstrapErr = printDryRun(envSecrets, env, argoCDAppPath, enableCilium, ciliumAppPath)
+		bootstrapErr = printDryRun(envSecrets, env, argoCDAppPath, enableCilium)
 		return bootstrapErr
 	}
 
@@ -458,39 +447,11 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		return bootstrapErr
 	}
 
-	bootstrapErr = configureCiliumIfEnabled(ctx, enableCilium, func(ctx context.Context) error {
-		appTimer := startStage("Configuring Cilium Application")
-		appStage := logger.Stage("Configuring Cilium for ArgoCD Management")
-		stepf("Applying Cilium Application for environment: %s", env)
-		_, appCreated, applyErr := client.ApplyCiliumApplication(ctx, envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, env, ciliumAppPath, false)
-		if applyErr != nil {
-			report.AddStage(appTimer.complete(false, applyErr))
-			return applyErr
-		}
-		report.Resources.CiliumApplication = &ApplicationReport{
-			Name:      "cilium",
-			Namespace: "argocd",
-			Created:   appCreated,
-		}
-		if appCreated {
-			appStage.Detail("✓ Cilium Application created successfully")
-		} else {
-			appStage.Detail("✓ Cilium Application updated successfully")
-		}
-		appStage.Detail("ArgoCD now manages the bootstrapped Cilium release from %s", ciliumAppPath)
-		appStage.Done()
-		report.AddStage(appTimer.complete(true, nil))
-		return nil
-	})
-	if bootstrapErr != nil {
-		return bootstrapErr
-	}
-
 	// Apply App of Apps
 	appTimer := startStage("Deploying App of Apps")
 	appStage := logger.Stage("Deploying App of Apps")
 	stepf("Applying App of Apps for environment: %s", env)
-	_, appCreated, err := client.ApplyAppOfApps(ctx, envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, env, argoCDAppPath, false)
+	_, appCreated, err := client.ApplyAppOfApps(ctx, envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, env, argoCDAppPath, enableCilium, false)
 	if err != nil {
 		bootstrapErr = err
 		report.AddStage(appTimer.complete(false, err))
@@ -507,6 +468,14 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		appStage.Detail("✓ App of Apps updated successfully")
 	}
 	appStage.Detail("ArgoCD will automatically sync enabled components")
+	if enableCilium {
+		appStage.Detail("Cilium enabled through the App of Apps")
+		report.Resources.CiliumApplication = &ApplicationReport{
+			Name:      "cilium",
+			Namespace: "argocd",
+			ManagedBy: "app-of-apps",
+		}
+	}
 	appStage.Done()
 	report.AddStage(appTimer.complete(true, nil))
 
@@ -562,8 +531,8 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func printDryRun(envSecrets *config.EnvironmentSecrets, env, appPath string, ciliumEnabled bool, ciliumPath string) error {
-	output, err := renderDryRunOutputWithOptions(envSecrets, env, appPath, ciliumEnabled, ciliumPath)
+func printDryRun(envSecrets *config.EnvironmentSecrets, env, appPath string, ciliumEnabled bool) error {
+	output, err := renderDryRunOutputWithOptions(envSecrets, env, appPath, ciliumEnabled)
 	if err != nil {
 		return err
 	}
@@ -577,11 +546,11 @@ func printDryRun(envSecrets *config.EnvironmentSecrets, env, appPath string, cil
 }
 
 func renderDryRunOutput(envSecrets *config.EnvironmentSecrets, env, appPath string) (string, error) {
-	return renderDryRunOutputWithOptions(envSecrets, env, appPath, false, "")
+	return renderDryRunOutputWithOptions(envSecrets, env, appPath, false)
 }
 
-func renderDryRunOutputWithOptions(envSecrets *config.EnvironmentSecrets, env, appPath string, ciliumEnabled bool, ciliumPath string) (string, error) {
-	repoSecret, appOfApps := buildDryRunObjects(envSecrets, env, appPath)
+func renderDryRunOutputWithOptions(envSecrets *config.EnvironmentSecrets, env, appPath string, ciliumEnabled bool) (string, error) {
+	repoSecret, appOfApps := buildDryRunObjectsWithOptions(envSecrets, env, appPath, ciliumEnabled)
 
 	repoJSON, err := json.MarshalIndent(repoSecret, "", "  ")
 	if err != nil {
@@ -591,55 +560,15 @@ func renderDryRunOutputWithOptions(envSecrets *config.EnvironmentSecrets, env, a
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal app of apps: %w", err)
 	}
-	var ciliumJSON []byte
-	if ciliumEnabled {
-		ciliumApp := k8s.BuildCiliumApplication(envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, env, ciliumPath)
-		ciliumJSON, err = json.MarshalIndent(ciliumApp.Object, "", "  ")
-		if err != nil {
-			return "", fmt.Errorf("failed to marshal Cilium Application: %w", err)
-		}
-	}
-
 	var out bytes.Buffer
 	out.WriteString("\n--- DRY RUN: Kubernetes Secrets ---\n")
 	out.Write(repoJSON)
 	out.WriteString("\n---\n")
-	if ciliumEnabled {
-		out.WriteString("\n--- DRY RUN: Cilium Application ---\n")
-		out.Write(ciliumJSON)
-		out.WriteString("\n---\n")
-	}
 	out.WriteString("\n--- DRY RUN: App of Apps Application ---\n")
 	out.Write(appJSON)
 	out.WriteString("\n")
 
 	return out.String(), nil
-}
-
-func resolveCiliumComponentPath(baseDir, localAppPath string) (string, error) {
-	valuesPath := filepath.Join(baseDir, localAppPath, "values.yaml")
-	data, err := os.ReadFile(valuesPath) // #nosec G304 -- validated repository path
-	if err != nil {
-		return "", fmt.Errorf("failed to read App of Apps values %s: %w", valuesPath, err)
-	}
-
-	var values struct {
-		Repo struct {
-			BasePath string `yaml:"basePath"`
-		} `yaml:"repo"`
-	}
-	if err := yaml.Unmarshal(data, &values); err != nil {
-		return "", fmt.Errorf("failed to parse App of Apps values %s: %w", valuesPath, err)
-	}
-
-	repoBasePath := path.Clean(strings.TrimSpace(values.Repo.BasePath))
-	if repoBasePath == "." {
-		repoBasePath = ""
-	}
-	if path.IsAbs(repoBasePath) || repoBasePath == ".." || strings.HasPrefix(repoBasePath, "../") {
-		return "", fmt.Errorf("repo.basePath must be a relative repository path")
-	}
-	return path.Join(repoBasePath, "components", "cilium"), nil
 }
 
 func validateCiliumEnvironment(env string) error {
@@ -685,14 +614,11 @@ func ensureArgoCDReadyForCilium(
 	return nil
 }
 
-func configureCiliumIfEnabled(ctx context.Context, enabled bool, apply func(context.Context) error) error {
-	if !enabled {
-		return nil
-	}
-	return apply(ctx)
+func buildDryRunObjects(envSecrets *config.EnvironmentSecrets, env, appPath string) (map[string]interface{}, map[string]interface{}) {
+	return buildDryRunObjectsWithOptions(envSecrets, env, appPath, false)
 }
 
-func buildDryRunObjects(envSecrets *config.EnvironmentSecrets, env, appPath string) (map[string]interface{}, map[string]interface{}) {
+func buildDryRunObjectsWithOptions(envSecrets *config.EnvironmentSecrets, env, appPath string, enableCilium bool) (map[string]interface{}, map[string]interface{}) {
 	repoSecret := map[string]interface{}{
 		"apiVersion": "v1",
 		"kind":       "Secret",
@@ -716,6 +642,20 @@ func buildDryRunObjects(envSecrets *config.EnvironmentSecrets, env, appPath stri
 		},
 	}
 
+	helmValues := map[string]interface{}{
+		"valueFiles": []string{
+			fmt.Sprintf("values/%s.yaml", env),
+		},
+	}
+	if enableCilium {
+		helmValues["parameters"] = []map[string]string{
+			{
+				"name":  "components.cilium.enabled",
+				"value": "true",
+			},
+		}
+	}
+
 	appOfApps := map[string]interface{}{
 		"apiVersion": "argoproj.io/v1alpha1",
 		"kind":       "Application",
@@ -729,11 +669,7 @@ func buildDryRunObjects(envSecrets *config.EnvironmentSecrets, env, appPath stri
 				"repoURL":        envSecrets.Repo.URL,
 				"targetRevision": envSecrets.Repo.TargetRevision,
 				"path":           appPath,
-				"helm": map[string]interface{}{
-					"valueFiles": []string{
-						fmt.Sprintf("values/%s.yaml", env),
-					},
-				},
+				"helm":           helmValues,
 			},
 			"destination": map[string]interface{}{
 				"server":    "https://kubernetes.default.svc",

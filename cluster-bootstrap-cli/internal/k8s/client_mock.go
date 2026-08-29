@@ -22,7 +22,6 @@ type MockClient struct {
 	CreateRepoSSHSecretErr   error
 	CreateGitCryptKeyErr     error
 	ApplyAppOfAppsErr        error
-	ApplyCiliumAppErr        error
 	EnsureNamespaceForbidden bool
 	CreateSecretForbidden    bool
 }
@@ -130,7 +129,7 @@ func (m *MockClient) CreateGitCryptKeySecret(ctx context.Context, keyData []byte
 }
 
 // ApplyAppOfApps simulates Application CR creation.
-func (m *MockClient) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, dryRun bool) (string, bool, error) {
+func (m *MockClient) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, enableCilium, dryRun bool) (string, bool, error) {
 	if m.ApplyAppOfAppsErr != nil {
 		return "", false, m.ApplyAppOfAppsErr
 	}
@@ -138,23 +137,7 @@ func (m *MockClient) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision
 		return "", false, fmt.Errorf("permission denied: cannot apply Application CRD: Forbidden")
 	}
 
-	app := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "argoproj.io/v1alpha1",
-			"kind":       "Application",
-			"metadata": map[string]interface{}{
-				"name":      "app-of-apps",
-				"namespace": "argocd",
-			},
-			"spec": map[string]interface{}{
-				"source": map[string]interface{}{
-					"repoURL":        repoURL,
-					"targetRevision": targetRevision,
-					"path":           appPath,
-				},
-			},
-		},
-	}
+	app := buildAppOfApps(repoURL, targetRevision, env, appPath, enableCilium)
 
 	// Check if application already exists to determine created vs updated
 	created := true
@@ -167,23 +150,6 @@ func (m *MockClient) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision
 	}
 
 	return "", created, nil
-}
-
-// ApplyCiliumApplication simulates Cilium Application CR creation.
-func (m *MockClient) ApplyCiliumApplication(ctx context.Context, repoURL, targetRevision, env, componentPath string, dryRun bool) (string, bool, error) {
-	if m.ApplyCiliumAppErr != nil {
-		return "", false, m.ApplyCiliumAppErr
-	}
-	if m.CreateSecretForbidden {
-		return "", false, fmt.Errorf("permission denied: cannot apply Application CRD: Forbidden")
-	}
-
-	app := BuildCiliumApplication(repoURL, targetRevision, env, componentPath)
-	_, exists := m.Applications["cilium"]
-	if !dryRun {
-		m.Applications["cilium"] = app
-	}
-	return "", !exists, nil
 }
 
 // GetSecret retrieves a stored secret from the mock (for testing verification).
@@ -205,6 +171,5 @@ type ClientInterface interface {
 	EnsureNamespace(ctx context.Context, name string) (bool, error)
 	CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey string, dryRun bool) (*corev1.Secret, bool, error)
 	CreateGitCryptKeySecret(ctx context.Context, keyData []byte) (bool, error)
-	ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, dryRun bool) (string, bool, error)
-	ApplyCiliumApplication(ctx context.Context, repoURL, targetRevision, env, componentPath string, dryRun bool) (string, bool, error)
+	ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, enableCilium, dryRun bool) (string, bool, error)
 }

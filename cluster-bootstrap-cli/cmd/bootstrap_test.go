@@ -109,18 +109,6 @@ func TestEnsureArgoCDReadyForCilium_FailsHandoffWhenUnhealthy(t *testing.T) {
 	assert.ErrorContains(t, err, "not ready for Cilium ownership handoff")
 }
 
-func TestConfigureCiliumIfEnabled(t *testing.T) {
-	for _, enabled := range []bool{false, true} {
-		called := false
-		err := configureCiliumIfEnabled(context.Background(), enabled, func(context.Context) error {
-			called = true
-			return nil
-		})
-		require.NoError(t, err)
-		assert.Equal(t, enabled, called)
-	}
-}
-
 func TestBuildDryRunObjects(t *testing.T) {
 	envSecrets := &config.EnvironmentSecrets{
 		Repo: config.RepoSecrets{
@@ -171,43 +159,11 @@ func TestRenderDryRunOutput_WithCilium(t *testing.T) {
 		},
 	}
 
-	output, err := renderDryRunOutputWithOptions(envSecrets, "dev", "k8s/apps", true, "k8s/components/cilium")
+	output, err := renderDryRunOutputWithOptions(envSecrets, "dev", "k8s/apps", true)
 	require.NoError(t, err)
-	assert.Contains(t, output, "DRY RUN: Cilium Application")
-	assert.Contains(t, output, `"name": "cilium"`)
-	assert.Contains(t, output, `"path": "k8s/components/cilium"`)
-	assert.Contains(t, output, `"releaseName": "cilium"`)
-}
-
-func TestResolveCiliumComponentPath(t *testing.T) {
-	tests := []struct {
-		name      string
-		basePath  string
-		want      string
-		wantError bool
-	}{
-		{name: "repository root", want: "components/cilium"},
-		{name: "repository subfolder", basePath: "k8s", want: "k8s/components/cilium"},
-		{name: "reject parent traversal", basePath: "../../other", wantError: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			baseDir := t.TempDir()
-			appsDir := filepath.Join(baseDir, "custom-apps")
-			require.NoError(t, os.MkdirAll(appsDir, 0755))
-			values := []byte("repo:\n  basePath: " + tt.basePath + "\n")
-			require.NoError(t, os.WriteFile(filepath.Join(appsDir, "values.yaml"), values, 0600))
-
-			got, err := resolveCiliumComponentPath(baseDir, "custom-apps")
-			if tt.wantError {
-				assert.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
-		})
-	}
+	assert.NotContains(t, output, "DRY RUN: Cilium Application")
+	assert.Contains(t, output, `"name": "components.cilium.enabled"`)
+	assert.Contains(t, output, `"value": "true"`)
 }
 
 func TestValidateCiliumEnvironment(t *testing.T) {

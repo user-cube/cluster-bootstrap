@@ -8,6 +8,15 @@ repo:
   basePath: ""
 
 components:
+  cilium:
+    enabled: false
+    namespace: kube-system
+    releaseName: cilium
+    syncWave: "-1"
+    cascadeDelete: false
+    syncOptions:
+      - ServerSideApply=true
+
   argocd:
     enabled: true
     namespace: argocd

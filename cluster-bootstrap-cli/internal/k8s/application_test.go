@@ -7,34 +7,48 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildCiliumApplication(t *testing.T) {
-	app := BuildCiliumApplication(
-		"ssh://git@example.com/repo.git",
-		"main",
-		"dev",
-		"k8s/components/cilium",
-	)
+func TestBuildAppOfAppsCiliumIsOptIn(t *testing.T) {
+	tests := []struct {
+		name         string
+		enableCilium bool
+		wantParams   []interface{}
+	}{
+		{
+			name:         "disabled by default",
+			enableCilium: false,
+			wantParams:   nil,
+		},
+		{
+			name:         "enabled through root application",
+			enableCilium: true,
+			wantParams: []interface{}{
+				map[string]interface{}{
+					"name":  "components.cilium.enabled",
+					"value": "true",
+				},
+			},
+		},
+	}
 
-	metadata := app.Object["metadata"].(map[string]interface{})
-	assert.Equal(t, "cilium", metadata["name"])
-	assert.Equal(t, "argocd", metadata["namespace"])
-	assert.NotContains(t, metadata, "finalizers")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := buildAppOfApps(
+				"ssh://git@example.com/repo.git",
+				"main",
+				"dev",
+				"apps",
+				tt.enableCilium,
+			)
 
-	spec := app.Object["spec"].(map[string]interface{})
-	source := spec["source"].(map[string]interface{})
-	assert.Equal(t, "ssh://git@example.com/repo.git", source["repoURL"])
-	assert.Equal(t, "main", source["targetRevision"])
-	assert.Equal(t, "k8s/components/cilium", source["path"])
-	helm := source["helm"].(map[string]interface{})
-	assert.Equal(t, "cilium", helm["releaseName"])
-	assert.Equal(t, []interface{}{"values/base.yaml", "values/dev.yaml"}, helm["valueFiles"])
-
-	destination := spec["destination"].(map[string]interface{})
-	assert.Equal(t, "kube-system", destination["namespace"])
-
-	syncPolicy := spec["syncPolicy"].(map[string]interface{})
-	automated := syncPolicy["automated"].(map[string]interface{})
-	assert.Equal(t, true, automated["prune"])
-	assert.Equal(t, true, automated["selfHeal"])
-	require.ElementsMatch(t, []interface{}{"CreateNamespace=true", "ServerSideApply=true"}, syncPolicy["syncOptions"])
+			spec := app.Object["spec"].(map[string]interface{})
+			source := spec["source"].(map[string]interface{})
+			helm := source["helm"].(map[string]interface{})
+			if tt.wantParams == nil {
+				assert.NotContains(t, helm, "parameters")
+				return
+			}
+			require.Contains(t, helm, "parameters")
+			assert.Equal(t, tt.wantParams, helm["parameters"])
+		})
+	}
 }

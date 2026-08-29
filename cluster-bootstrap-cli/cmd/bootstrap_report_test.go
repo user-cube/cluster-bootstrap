@@ -96,7 +96,7 @@ func TestBootstrapReport_ToJSONWithCilium(t *testing.T) {
 	report.Resources.CiliumApplication = &ApplicationReport{
 		Name:      "cilium",
 		Namespace: "argocd",
-		Created:   true,
+		ManagedBy: "app-of-apps",
 	}
 	report.Complete(true, nil)
 
@@ -105,6 +105,7 @@ func TestBootstrapReport_ToJSONWithCilium(t *testing.T) {
 	assert.Contains(t, jsonStr, `"enable_cilium": true`)
 	assert.Contains(t, jsonStr, `"cilium_release"`)
 	assert.Contains(t, jsonStr, `"cilium_application"`)
+	assert.Contains(t, jsonStr, `"managed_by": "app-of-apps"`)
 }
 
 func TestBootstrapReport_WriteToFile(t *testing.T) {

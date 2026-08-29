@@ -18,10 +18,9 @@ cluster-bootstrap-cli bootstrap dev
 4. Optionally creates `git-crypt-key` Secret (if `--gitcrypt-key-file` provided)
 5. When `--enable-cilium` is set, installs or upgrades Cilium and waits for Helm's workload readiness checks to pass
 6. Installs ArgoCD via Helm (from `components/argocd/`)
-7. When enabled, creates or updates the repository-backed Cilium Application
-8. Deploys the App of Apps root Application
-9. Optionally waits for cluster components to be ready (if `--wait-for-health` provided)
-10. Prints ArgoCD access instructions
+7. Deploys the App of Apps root Application, enabling its repository-backed Cilium Application when requested
+8. Optionally waits for cluster components to be ready (if `--wait-for-health` provided)
+9. Prints ArgoCD access instructions
 
 ## Idempotent Behavior
 
@@ -31,7 +30,7 @@ The bootstrap command is **fully idempotent** and can be safely run multiple tim
 - **Secrets**: Automatically updated if they already exist, created otherwise
 - **ArgoCD Helm Release**: Upgraded if already installed, installed otherwise
 - **Cilium Helm Release**: When enabled, upgraded if already installed and left untouched when the flag is omitted
-- **Cilium Application**: When enabled, updated if it already exists and left untouched when the flag is omitted
+- **Cilium Application**: Disabled in the chart by default and rendered by the App of Apps only when the flag is enabled
 - **App of Apps Application**: Updated with latest configuration if it exists, created otherwise
 
 When running the command multiple times, you'll see clear feedback indicating whether each resource was **Created** or **Updated**:
@@ -65,7 +64,7 @@ This makes bootstrap safe to re-run after configuration changes, secret updates,
 | `--report-format` | `summary` | Report format: `summary`, `json`, or `none` |
 | `--report-output` | — | Write JSON report to file |
 
-When `--enable-cilium` and `--skip-argocd-install` are combined, the CLI waits for the existing `argocd-server` deployment before creating or updating the Cilium Application.
+When `--enable-cilium` and `--skip-argocd-install` are combined, the CLI waits for the existing `argocd-server` deployment before applying the App of Apps with Cilium enabled.
 
 ## Examples
 

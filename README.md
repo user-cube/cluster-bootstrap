@@ -97,8 +97,7 @@ This will:
 2. Create the `argocd` namespace and SSH credentials secret
 3. Optionally install Cilium and wait for it to become healthy
 4. Install ArgoCD via Helm
-5. When enabled, configure Cilium as an ArgoCD Application
-6. Deploy the root **App of Apps** Application
+5. Deploy the root **App of Apps** Application, enabling its Cilium child Application when requested
 
 > **💡 Idempotent by design**: The bootstrap command can be safely run multiple times. It automatically detects existing resources and updates them instead of failing. Perfect for configuration updates or GitOps workflows.
 
