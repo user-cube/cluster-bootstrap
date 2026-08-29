@@ -22,6 +22,7 @@ type MockClient struct {
 	CreateRepoSSHSecretErr   error
 	CreateGitCryptKeyErr     error
 	ApplyAppOfAppsErr        error
+	ApplyCiliumAppErr        error
 	EnsureNamespaceForbidden bool
 	CreateSecretForbidden    bool
 }
@@ -168,6 +169,23 @@ func (m *MockClient) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision
 	return "", created, nil
 }
 
+// ApplyCiliumApplication simulates Cilium Application CR creation.
+func (m *MockClient) ApplyCiliumApplication(ctx context.Context, repoURL, targetRevision, env, componentPath string, dryRun bool) (string, bool, error) {
+	if m.ApplyCiliumAppErr != nil {
+		return "", false, m.ApplyCiliumAppErr
+	}
+	if m.CreateSecretForbidden {
+		return "", false, fmt.Errorf("permission denied: cannot apply Application CRD: Forbidden")
+	}
+
+	app := BuildCiliumApplication(repoURL, targetRevision, env, componentPath)
+	_, exists := m.Applications["cilium"]
+	if !dryRun {
+		m.Applications["cilium"] = app
+	}
+	return "", !exists, nil
+}
+
 // GetSecret retrieves a stored secret from the mock (for testing verification).
 func (m *MockClient) GetSecret(namespace, name string) *corev1.Secret {
 	if m.Secrets[namespace] == nil {
@@ -188,4 +206,5 @@ type ClientInterface interface {
 	CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey string, dryRun bool) (*corev1.Secret, bool, error)
 	CreateGitCryptKeySecret(ctx context.Context, keyData []byte) (bool, error)
 	ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, dryRun bool) (string, bool, error)
+	ApplyCiliumApplication(ctx context.Context, repoURL, targetRevision, env, componentPath string, dryRun bool) (string, bool, error)
 }

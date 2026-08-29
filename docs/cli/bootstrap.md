@@ -16,10 +16,12 @@ cluster-bootstrap-cli bootstrap dev
 2. Creates the `argocd` namespace
 3. Creates the `repo-ssh-key` Secret with Git SSH credentials
 4. Optionally creates `git-crypt-key` Secret (if `--gitcrypt-key-file` provided)
-5. Installs ArgoCD via Helm (from `components/argocd/`)
-6. Deploys the App of Apps root Application
-7. Optionally waits for cluster components to be ready (if `--wait-for-health` provided)
-8. Prints ArgoCD access instructions
+5. When `--enable-cilium` is set, installs or upgrades Cilium and waits for Helm's workload readiness checks to pass
+6. Installs ArgoCD via Helm (from `components/argocd/`)
+7. When enabled, creates or updates the repository-backed Cilium Application
+8. Deploys the App of Apps root Application
+9. Optionally waits for cluster components to be ready (if `--wait-for-health` provided)
+10. Prints ArgoCD access instructions
 
 ## Idempotent Behavior
 
@@ -28,6 +30,8 @@ The bootstrap command is **fully idempotent** and can be safely run multiple tim
 - **Namespace**: Verified and created only if it doesn't exist
 - **Secrets**: Automatically updated if they already exist, created otherwise
 - **ArgoCD Helm Release**: Upgraded if already installed, installed otherwise
+- **Cilium Helm Release**: When enabled, upgraded if already installed and left untouched when the flag is omitted
+- **Cilium Application**: When enabled, updated if it already exists and left untouched when the flag is omitted
 - **App of Apps Application**: Updated with latest configuration if it exists, created otherwise
 
 When running the command multiple times, you'll see clear feedback indicating whether each resource was **Created** or **Updated**:
@@ -50,6 +54,7 @@ This makes bootstrap safe to re-run after configuration changes, secret updates,
 | `--dry-run` | `false` | Print manifests without applying |
 | `--dry-run-output` | — | Write dry-run manifests to a file (JSON output) |
 | `--skip-argocd-install` | `false` | Skip the Helm ArgoCD installation |
+| `--enable-cilium` | `false` | Install Cilium in `kube-system`, wait until healthy, then configure it for ArgoCD management |
 | `--kubeconfig` | `~/.kube/config` | Path to kubeconfig file |
 | `--context` | current context | Kubeconfig context to use |
 | `--age-key-file` | `SOPS_AGE_KEY_FILE` env | Path to age private key (SOPS only) |
@@ -60,11 +65,16 @@ This makes bootstrap safe to re-run after configuration changes, secret updates,
 | `--report-format` | `summary` | Report format: `summary`, `json`, or `none` |
 | `--report-output` | — | Write JSON report to file |
 
+When `--enable-cilium` and `--skip-argocd-install` are combined, the CLI waits for the existing `argocd-server` deployment before creating or updating the Cilium Application.
+
 ## Examples
 
 ```bash
 # SOPS (default)
 cluster-bootstrap-cli bootstrap dev
+
+# Bootstrap Cilium before ArgoCD
+cluster-bootstrap-cli bootstrap dev --enable-cilium
 
 # git-crypt
 cluster-bootstrap-cli bootstrap dev --encryption git-crypt

@@ -85,12 +85,20 @@ task install
 ./cluster-bootstrap-cli/cluster-bootstrap-cli bootstrap dev
 ```
 
+To bootstrap Cilium as the cluster CNI before ArgoCD, opt in explicitly:
+
+```bash
+./cluster-bootstrap-cli/cluster-bootstrap-cli bootstrap dev --enable-cilium
+```
+
 This will:
 
 1. Decrypt environment secrets (SOPS + age by default, or git-crypt)
 2. Create the `argocd` namespace and SSH credentials secret
-3. Install ArgoCD via Helm
-4. Deploy the root **App of Apps** Application
+3. Optionally install Cilium and wait for it to become healthy
+4. Install ArgoCD via Helm
+5. When enabled, configure Cilium as an ArgoCD Application
+6. Deploy the root **App of Apps** Application
 
 > **💡 Idempotent by design**: The bootstrap command can be safely run multiple times. It automatically detects existing resources and updates them instead of failing. Perfect for configuration updates or GitOps workflows.
 
@@ -170,12 +178,12 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
 ## Architecture
 
 ```
-CLI bootstrap  →  ArgoCD + App of Apps (root Application)
-                        ↓
-                   apps/ (Helm chart with dynamic template)
-                        ↓
-              components/argocd/  (self-managed ArgoCD)
-              components/xxx/    (other components)
+CLI bootstrap  →  optional Cilium  →  ArgoCD + App of Apps
+                       ↑                       ↓
+                       └── Cilium Application  apps/ (root chart)
+                                               ↓
+                                      components/argocd/
+                                      components/xxx/
 ```
 
 ArgoCD manages itself — changes pushed to this repo are automatically synced.
@@ -186,6 +194,7 @@ The `apps/` chart uses a **single dynamic template** that iterates over a `compo
 
 | Component | Namespace | Sync Wave | Description |
 |-----------|-----------|-----------|-------------|
+| Cilium | `kube-system` | Bootstrap | Optional CNI, enabled only with `--enable-cilium` |
 | ArgoCD | `argocd` | 0 | Self-managed GitOps controller |
 | Vault | `vault` | 1 | Secrets management |
 | External Secrets | `external-secrets` | 1 | Syncs external secrets into Kubernetes |

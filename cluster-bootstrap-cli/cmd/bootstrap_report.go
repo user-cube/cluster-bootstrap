@@ -36,10 +36,12 @@ type StageReport struct {
 
 // ResourceReport captures information about created/updated resources.
 type ResourceReport struct {
-	Namespace     NamespaceReport   `json:"namespace"`
-	Secrets       []SecretReport    `json:"secrets"`
-	ArgoCDRelease HelmReleaseReport `json:"argocd_release"`
-	AppOfApps     ApplicationReport `json:"app_of_apps"`
+	Namespace         NamespaceReport    `json:"namespace"`
+	Secrets           []SecretReport     `json:"secrets"`
+	CiliumRelease     *HelmReleaseReport `json:"cilium_release,omitempty"`
+	ArgoCDRelease     HelmReleaseReport  `json:"argocd_release"`
+	CiliumApplication *ApplicationReport `json:"cilium_application,omitempty"`
+	AppOfApps         ApplicationReport  `json:"app_of_apps"`
 }
 
 // NamespaceReport captures namespace creation info.
@@ -94,6 +96,7 @@ type ConfigReport struct {
 	Context           string `json:"context,omitempty"`
 	DryRun            bool   `json:"dry_run"`
 	SkipArgoCDInstall bool   `json:"skip_argocd_install"`
+	EnableCilium      bool   `json:"enable_cilium,omitempty"`
 	WaitForHealth     bool   `json:"wait_for_health"`
 }
 
@@ -183,6 +186,9 @@ func (r *BootstrapReport) PrintSummary() {
 	for _, secret := range r.Resources.Secrets {
 		fmt.Printf("  Secret:        %s/%s (%s)\n", secret.Namespace, secret.Name, statusText(secret.Created, "created", "updated"))
 	}
+	if r.Resources.CiliumRelease != nil {
+		fmt.Printf("  Helm Release:  %s (%s)\n", r.Resources.CiliumRelease.Name, statusText(r.Resources.CiliumRelease.Installed, "installed", "upgraded"))
+	}
 
 	if !r.Resources.ArgoCDRelease.Skipped {
 		fmt.Printf("  Helm Release:  %s (%s)\n", r.Resources.ArgoCDRelease.Name, statusText(r.Resources.ArgoCDRelease.Installed, "installed", "upgraded"))
@@ -190,6 +196,9 @@ func (r *BootstrapReport) PrintSummary() {
 		fmt.Printf("  Helm Release:  %s (skipped)\n", r.Resources.ArgoCDRelease.Name)
 	}
 
+	if r.Resources.CiliumApplication != nil {
+		fmt.Printf("  Application:   %s (%s)\n", r.Resources.CiliumApplication.Name, statusText(r.Resources.CiliumApplication.Created, "created", "updated"))
+	}
 	fmt.Printf("  Application:   %s (%s)\n", r.Resources.AppOfApps.Name, statusText(r.Resources.AppOfApps.Created, "created", "updated"))
 
 	// Health checks

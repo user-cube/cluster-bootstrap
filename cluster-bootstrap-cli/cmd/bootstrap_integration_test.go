@@ -192,6 +192,41 @@ func TestBootstrapIntegration_AppOfAppsWithEnv(t *testing.T) {
 	}
 }
 
+func TestBootstrapIntegration_CiliumApplicationIsIdempotent(t *testing.T) {
+	mockClient := k8s.NewMockClient()
+	ctx := context.Background()
+
+	_, created, err := mockClient.ApplyCiliumApplication(
+		ctx,
+		"ssh://git@example.com/repo.git",
+		"main",
+		"dev",
+		"components/cilium",
+		false,
+	)
+	require.NoError(t, err)
+	assert.True(t, created)
+
+	_, created, err = mockClient.ApplyCiliumApplication(
+		ctx,
+		"ssh://git@example.com/repo.git",
+		"main",
+		"dev",
+		"components/cilium",
+		false,
+	)
+	require.NoError(t, err)
+	assert.False(t, created)
+
+	app := mockClient.GetApplication("cilium")
+	require.NotNil(t, app)
+	spec := app.Object["spec"].(map[string]interface{})
+	source := spec["source"].(map[string]interface{})
+	assert.Equal(t, "components/cilium", source["path"])
+	destination := spec["destination"].(map[string]interface{})
+	assert.Equal(t, "kube-system", destination["namespace"])
+}
+
 // TestBootstrapIntegration_KubeconfigErrors tests kubeconfig loading error scenarios.
 func TestBootstrapIntegration_KubeconfigErrors(t *testing.T) {
 	tests := []struct {
