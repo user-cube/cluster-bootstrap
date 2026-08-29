@@ -382,7 +382,9 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 			return bootstrapErr
 		}
 
-		keyData, err := os.ReadFile(ageKeyPath) // #nosec G304
+		// The path is deliberately provided by the operator through a CLI flag or
+		// SOPS_AGE_KEY_FILE; bootstrap must support age keys stored outside the repo.
+		keyData, err := os.ReadFile(ageKeyPath) // #nosec G304,G703 -- explicit operator-controlled key path
 		if err != nil {
 			bootstrapErr = fmt.Errorf("failed to read SOPS age key file: %w", err)
 			report.AddStage(secretsK8sTimer.complete(false, bootstrapErr))
