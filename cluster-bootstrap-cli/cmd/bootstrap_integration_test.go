@@ -88,7 +88,7 @@ func TestBootstrapIntegration_SuccessfulFlow(t *testing.T) {
 	assert.Equal(t, envSecrets.Repo.URL, secret.StringData["url"])
 
 	// Step 3: Apply App of Apps
-	_, created, err = mockClient.ApplyAppOfApps(ctx, envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, "dev", "apps", false)
+	_, created, err = mockClient.ApplyAppOfApps(ctx, envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, "dev", "apps", false, false)
 	require.NoError(t, err)
 	assert.True(t, created, "should indicate app was created")
 	app := mockClient.GetApplication("app-of-apps")
@@ -175,7 +175,7 @@ func TestBootstrapIntegration_AppOfAppsWithEnv(t *testing.T) {
 			_, _, err = mockClient.CreateRepoSSHSecret(ctx, "ssh://git@example.com/repo.git", "key", false)
 			require.NoError(t, err)
 
-			_, _, err = mockClient.ApplyAppOfApps(ctx, "ssh://git@example.com/repo.git", "main", tt.env, tt.appPath, false)
+			_, _, err = mockClient.ApplyAppOfApps(ctx, "ssh://git@example.com/repo.git", "main", tt.env, tt.appPath, false, false)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -190,6 +190,48 @@ func TestBootstrapIntegration_AppOfAppsWithEnv(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBootstrapIntegration_CiliumIsEnabledThroughAppOfApps(t *testing.T) {
+	mockClient := k8s.NewMockClient()
+	ctx := context.Background()
+
+	_, created, err := mockClient.ApplyAppOfApps(
+		ctx,
+		"ssh://git@example.com/repo.git",
+		"main",
+		"dev",
+		"apps",
+		true,
+		false,
+	)
+	require.NoError(t, err)
+	assert.True(t, created)
+
+	_, created, err = mockClient.ApplyAppOfApps(
+		ctx,
+		"ssh://git@example.com/repo.git",
+		"main",
+		"dev",
+		"apps",
+		true,
+		false,
+	)
+	require.NoError(t, err)
+	assert.False(t, created)
+
+	app := mockClient.GetApplication("app-of-apps")
+	require.NotNil(t, app)
+	spec := app.Object["spec"].(map[string]interface{})
+	source := spec["source"].(map[string]interface{})
+	helm := source["helm"].(map[string]interface{})
+	require.Contains(t, helm, "parameters")
+	assert.Equal(t, []interface{}{
+		map[string]interface{}{
+			"name":  "components.cilium.enabled",
+			"value": "true",
+		},
+	}, helm["parameters"])
 }
 
 // TestBootstrapIntegration_KubeconfigErrors tests kubeconfig loading error scenarios.

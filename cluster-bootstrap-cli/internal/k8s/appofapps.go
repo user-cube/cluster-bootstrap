@@ -15,10 +15,27 @@ const argoCDNamespace = "argocd"
 
 // ApplyAppOfApps creates or updates the App of Apps root Application CR.
 // Returns a boolean indicating if it was created (true) or updated (false) when not in dry-run mode.
-// NOTE: This function's signature was changed to return an additional boolean value, which is a
-// breaking API change. External callers must be updated to handle the extra return value.
-func (c *Client) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, dryRun bool) (string, bool, error) {
-	app := &unstructured.Unstructured{
+func (c *Client) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, enableCilium, dryRun bool) (string, bool, error) {
+	app := buildAppOfApps(repoURL, targetRevision, env, appPath, enableCilium)
+	return c.applyApplication(ctx, app, dryRun, "App of Apps")
+}
+
+func buildAppOfApps(repoURL, targetRevision, env, appPath string, enableCilium bool) *unstructured.Unstructured {
+	helm := map[string]interface{}{
+		"valueFiles": []interface{}{
+			fmt.Sprintf("values/%s.yaml", env),
+		},
+	}
+	if enableCilium {
+		helm["parameters"] = []interface{}{
+			map[string]interface{}{
+				"name":  "components.cilium.enabled",
+				"value": "true",
+			},
+		}
+	}
+
+	return &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "argoproj.io/v1alpha1",
 			"kind":       "Application",
@@ -32,11 +49,7 @@ func (c *Client) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, en
 					"repoURL":        repoURL,
 					"targetRevision": targetRevision,
 					"path":           appPath,
-					"helm": map[string]interface{}{
-						"valueFiles": []interface{}{
-							fmt.Sprintf("values/%s.yaml", env),
-						},
-					},
+					"helm":           helm,
 				},
 				"destination": map[string]interface{}{
 					"server":    "https://kubernetes.default.svc",
@@ -51,6 +64,10 @@ func (c *Client) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, en
 			},
 		},
 	}
+}
+
+func (c *Client) applyApplication(ctx context.Context, app *unstructured.Unstructured, dryRun bool, description string) (string, bool, error) {
+	name := app.GetName()
 
 	if dryRun {
 		data, err := json.MarshalIndent(app.Object, "", "  ")
@@ -67,11 +84,11 @@ func (c *Client) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, en
 	}
 
 	// Check if Application already exists
-	_, err := c.DynamicClient.Resource(gvr).Namespace(argoCDNamespace).Get(ctx, "app-of-apps", metav1.GetOptions{})
+	_, err := c.DynamicClient.Resource(gvr).Namespace(argoCDNamespace).Get(ctx, name, metav1.GetOptions{})
 	exists := err == nil
 
 	_, err = c.DynamicClient.Resource(gvr).Namespace(argoCDNamespace).Apply(
-		ctx, "app-of-apps", app, metav1.ApplyOptions{FieldManager: "cluster-bootstrap"},
+		ctx, name, app, metav1.ApplyOptions{FieldManager: "cluster-bootstrap"},
 	)
 	if err != nil {
 		if apierrors.IsForbidden(err) {
@@ -80,7 +97,7 @@ func (c *Client) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, en
 		if apierrors.IsNotFound(err) {
 			return "", false, fmt.Errorf("ArgoCD CRD not found: %w\n  hint: ensure ArgoCD is installed before creating Applications\n  tip: try: kubectl get crd applications.argoproj.io", err)
 		}
-		return "", false, fmt.Errorf("failed to apply App of Apps: %w\n  hint: verify the Application CR is valid and ArgoCD is running", err)
+		return "", false, fmt.Errorf("failed to apply %s: %w\n  hint: verify the Application CR is valid and ArgoCD is running", description, err)
 	}
 
 	return "", !exists, nil

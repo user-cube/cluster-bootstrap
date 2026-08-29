@@ -129,7 +129,7 @@ func (m *MockClient) CreateGitCryptKeySecret(ctx context.Context, keyData []byte
 }
 
 // ApplyAppOfApps simulates Application CR creation.
-func (m *MockClient) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, dryRun bool) (string, bool, error) {
+func (m *MockClient) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, enableCilium, dryRun bool) (string, bool, error) {
 	if m.ApplyAppOfAppsErr != nil {
 		return "", false, m.ApplyAppOfAppsErr
 	}
@@ -137,23 +137,7 @@ func (m *MockClient) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision
 		return "", false, fmt.Errorf("permission denied: cannot apply Application CRD: Forbidden")
 	}
 
-	app := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "argoproj.io/v1alpha1",
-			"kind":       "Application",
-			"metadata": map[string]interface{}{
-				"name":      "app-of-apps",
-				"namespace": "argocd",
-			},
-			"spec": map[string]interface{}{
-				"source": map[string]interface{}{
-					"repoURL":        repoURL,
-					"targetRevision": targetRevision,
-					"path":           appPath,
-				},
-			},
-		},
-	}
+	app := buildAppOfApps(repoURL, targetRevision, env, appPath, enableCilium)
 
 	// Check if application already exists to determine created vs updated
 	created := true
@@ -187,5 +171,5 @@ type ClientInterface interface {
 	EnsureNamespace(ctx context.Context, name string) (bool, error)
 	CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey string, dryRun bool) (*corev1.Secret, bool, error)
 	CreateGitCryptKeySecret(ctx context.Context, keyData []byte) (bool, error)
-	ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, dryRun bool) (string, bool, error)
+	ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, enableCilium, dryRun bool) (string, bool, error)
 }

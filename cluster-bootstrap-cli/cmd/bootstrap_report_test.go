@@ -80,6 +80,32 @@ func TestBootstrapReport_ToJSON(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "dev", decoded["environment"])
 	assert.Equal(t, true, decoded["success"])
+	resources := decoded["resources"].(map[string]interface{})
+	assert.NotContains(t, resources, "cilium_release")
+	assert.NotContains(t, resources, "cilium_application")
+}
+
+func TestBootstrapReport_ToJSONWithCilium(t *testing.T) {
+	report := NewBootstrapReport("dev")
+	report.Configuration.EnableCilium = true
+	report.Resources.CiliumRelease = &HelmReleaseReport{
+		Name:      "cilium",
+		Namespace: "kube-system",
+		Installed: true,
+	}
+	report.Resources.CiliumApplication = &ApplicationReport{
+		Name:      "cilium",
+		Namespace: "argocd",
+		ManagedBy: "app-of-apps",
+	}
+	report.Complete(true, nil)
+
+	jsonStr, err := report.ToJSON()
+	require.NoError(t, err)
+	assert.Contains(t, jsonStr, `"enable_cilium": true`)
+	assert.Contains(t, jsonStr, `"cilium_release"`)
+	assert.Contains(t, jsonStr, `"cilium_application"`)
+	assert.Contains(t, jsonStr, `"managed_by": "app-of-apps"`)
 }
 
 func TestBootstrapReport_WriteToFile(t *testing.T) {

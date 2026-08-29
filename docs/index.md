@@ -18,6 +18,7 @@ This repo provides a fully automated, reproducible way to bootstrap a Kubernetes
 
 | Component | Namespace | Sync Wave | Purpose | Optional |
 |-----------|-----------|-----------|---------|----------|
+| Cilium | `kube-system` | Bootstrap | Cluster CNI, bootstrapped before ArgoCD | Yes (`--enable-cilium`) |
 | ArgoCD | `argocd` | 0 | GitOps controller (self-managed) | No |
 | Vault | `vault` | 1 | Secrets engine | Yes* |
 | External Secrets | `external-secrets` | 1 | Syncs secrets from Vault/AWS to Kubernetes | Yes* |

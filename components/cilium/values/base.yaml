@@ -1,0 +1,6 @@
+cilium:
+  nonIdempotentAnnotations:
+    argocd.argoproj.io/compare-options: IgnoreExtraneous
+
+  operator:
+    replicas: 1

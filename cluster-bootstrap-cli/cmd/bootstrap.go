@@ -8,9 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
-
 	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/config"
 	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/helm"
 	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap-cli/internal/k8s"
@@ -22,6 +22,7 @@ var (
 	dryRun            bool
 	dryRunOutput      string
 	skipArgoCDInstall bool
+	enableCilium      bool
 	kubeconfig        string
 	kubeContext       string
 	bootstrapAgeKey   string
@@ -36,8 +37,8 @@ var (
 
 var bootstrapCmd = &cobra.Command{
 	Use:   "bootstrap <environment>",
-	Short: "Bootstrap a Kubernetes cluster with ArgoCD and secrets",
-	Long: `Decrypts the secrets file, installs ArgoCD,
+	Short: "Bootstrap a Kubernetes cluster with optional Cilium, ArgoCD, and secrets",
+	Long: `Decrypts the secrets file, optionally installs Cilium, installs ArgoCD,
 creates Kubernetes secrets, and applies the App of Apps root Application.
 
 Replaces the manual install.sh process.`,
@@ -50,6 +51,7 @@ func init() {
 	bootstrapCmd.Flags().BoolVar(&dryRun, "dry-run", false, "print manifests without applying")
 	bootstrapCmd.Flags().StringVar(&dryRunOutput, "dry-run-output", "", "write dry-run manifests to file")
 	bootstrapCmd.Flags().BoolVar(&skipArgoCDInstall, "skip-argocd-install", false, "skip ArgoCD installation")
+	bootstrapCmd.Flags().BoolVar(&enableCilium, "enable-cilium", false, "install Cilium before ArgoCD and configure it for ArgoCD management")
 	bootstrapCmd.Flags().StringVar(&kubeconfig, "kubeconfig", "", "path to kubeconfig file")
 	bootstrapCmd.Flags().StringVar(&kubeContext, "context", "", "kubeconfig context to use")
 	bootstrapCmd.Flags().StringVar(&bootstrapAgeKey, "age-key-file", "", "path to age private key file for SOPS decryption")
@@ -123,6 +125,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		Context:           kubeContext,
 		DryRun:            dryRun,
 		SkipArgoCDInstall: skipArgoCDInstall,
+		EnableCilium:      enableCilium,
 		WaitForHealth:     waitForHealth,
 	}
 
@@ -176,6 +179,13 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		report.AddStage(validationTimer.complete(false, err))
 		return bootstrapErr
 	}
+	if enableCilium {
+		if err := validateCiliumEnvironment(env); err != nil {
+			bootstrapErr = err
+			report.AddStage(validationTimer.complete(false, err))
+			return err
+		}
+	}
 	report.AddStage(validationTimer.complete(true, nil))
 
 	// Log configuration
@@ -201,6 +211,9 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	}
 	if skipArgoCDInstall {
 		configStage.Detail("⚠ Skipping ArgoCD installation")
+	}
+	if enableCilium {
+		configStage.Detail("Cilium: enabled")
 	}
 	configStage.Done()
 
@@ -271,7 +284,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	}
 
 	if dryRun {
-		bootstrapErr = printDryRun(envSecrets, env, argoCDAppPath)
+		bootstrapErr = printDryRun(envSecrets, env, argoCDAppPath, enableCilium)
 		return bootstrapErr
 	}
 
@@ -356,31 +369,61 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	secretsK8sStage.Done()
 	report.AddStage(secretsK8sTimer.complete(true, nil))
 
-	// Install ArgoCD via Helm
-	if !skipArgoCDInstall {
-		helmTimer := startStage("Installing ArgoCD")
-		helmStage := logger.Stage("Installing ArgoCD via Helm")
-		stepf("Installing ArgoCD via Helm...")
-		installed, err := helm.InstallArgoCD(ctx, kubeconfig, kubeContext, env, baseDir, verbose)
-		if err != nil {
-			bootstrapErr = fmt.Errorf("failed to install ArgoCD: %w", err)
-			report.AddStage(helmTimer.complete(false, bootstrapErr))
-			return bootstrapErr
-		}
-		report.Resources.ArgoCDRelease = HelmReleaseReport{
-			Name:      "argocd",
-			Namespace: "argocd",
-			Installed: installed,
-			Skipped:   false,
-		}
-		if installed {
-			helmStage.Detail("✓ ArgoCD installed successfully")
-		} else {
-			helmStage.Detail("✓ ArgoCD upgraded successfully")
-		}
-		helmStage.Done()
-		report.AddStage(helmTimer.complete(true, nil))
-	} else {
+	bootstrapErr = runBootstrapComponents(
+		ctx,
+		enableCilium,
+		skipArgoCDInstall,
+		func(ctx context.Context) error {
+			helmTimer := startStage("Installing Cilium")
+			helmStage := logger.Stage("Installing Cilium via Helm")
+			stepf("Installing Cilium via Helm and waiting for it to become healthy...")
+			installed, installErr := helm.InstallCilium(ctx, kubeconfig, kubeContext, env, baseDir, verbose)
+			if installErr != nil {
+				report.AddStage(helmTimer.complete(false, installErr))
+				return installErr
+			}
+			report.Resources.CiliumRelease = &HelmReleaseReport{
+				Name:      "cilium",
+				Namespace: "kube-system",
+				Installed: installed,
+			}
+			if installed {
+				helmStage.Detail("✓ Cilium installed and healthy")
+			} else {
+				helmStage.Detail("✓ Cilium upgraded and healthy")
+			}
+			helmStage.Done()
+			report.AddStage(helmTimer.complete(true, nil))
+			return nil
+		},
+		func(ctx context.Context) error {
+			helmTimer := startStage("Installing ArgoCD")
+			helmStage := logger.Stage("Installing ArgoCD via Helm")
+			stepf("Installing ArgoCD via Helm...")
+			installed, installErr := helm.InstallArgoCD(ctx, kubeconfig, kubeContext, env, baseDir, verbose)
+			if installErr != nil {
+				report.AddStage(helmTimer.complete(false, installErr))
+				return installErr
+			}
+			report.Resources.ArgoCDRelease = HelmReleaseReport{
+				Name:      "argocd",
+				Namespace: "argocd",
+				Installed: installed,
+			}
+			if installed {
+				helmStage.Detail("✓ ArgoCD installed successfully")
+			} else {
+				helmStage.Detail("✓ ArgoCD upgraded successfully")
+			}
+			helmStage.Done()
+			report.AddStage(helmTimer.complete(true, nil))
+			return nil
+		},
+	)
+	if bootstrapErr != nil {
+		return bootstrapErr
+	}
+	if skipArgoCDInstall {
 		report.Resources.ArgoCDRelease = HelmReleaseReport{
 			Name:      "argocd",
 			Namespace: "argocd",
@@ -388,11 +431,27 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	bootstrapErr = ensureArgoCDReadyForCilium(ctx, enableCilium, skipArgoCDInstall, func(ctx context.Context) error {
+		healthTimer := startStage("Waiting for Existing ArgoCD")
+		stepf("Waiting for the existing ArgoCD installation to become ready...")
+		waitCtx, cancel := context.WithTimeout(ctx, time.Duration(healthTimeout)*time.Second)
+		defer cancel()
+		if waitErr := waitForDeployment(waitCtx, client.Clientset, "argocd", "argocd-server"); waitErr != nil {
+			report.AddStage(healthTimer.complete(false, waitErr))
+			return waitErr
+		}
+		report.AddStage(healthTimer.complete(true, nil))
+		return nil
+	})
+	if bootstrapErr != nil {
+		return bootstrapErr
+	}
+
 	// Apply App of Apps
 	appTimer := startStage("Deploying App of Apps")
 	appStage := logger.Stage("Deploying App of Apps")
 	stepf("Applying App of Apps for environment: %s", env)
-	_, appCreated, err := client.ApplyAppOfApps(ctx, envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, env, argoCDAppPath, false)
+	_, appCreated, err := client.ApplyAppOfApps(ctx, envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, env, argoCDAppPath, enableCilium, false)
 	if err != nil {
 		bootstrapErr = err
 		report.AddStage(appTimer.complete(false, err))
@@ -409,6 +468,14 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		appStage.Detail("✓ App of Apps updated successfully")
 	}
 	appStage.Detail("ArgoCD will automatically sync enabled components")
+	if enableCilium {
+		appStage.Detail("Cilium enabled through the App of Apps")
+		report.Resources.CiliumApplication = &ApplicationReport{
+			Name:      "cilium",
+			Namespace: "argocd",
+			ManagedBy: "app-of-apps",
+		}
+	}
 	appStage.Done()
 	report.AddStage(appTimer.complete(true, nil))
 
@@ -464,8 +531,8 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func printDryRun(envSecrets *config.EnvironmentSecrets, env, appPath string) error {
-	output, err := renderDryRunOutput(envSecrets, env, appPath)
+func printDryRun(envSecrets *config.EnvironmentSecrets, env, appPath string, ciliumEnabled bool) error {
+	output, err := renderDryRunOutputWithOptions(envSecrets, env, appPath, ciliumEnabled)
 	if err != nil {
 		return err
 	}
@@ -479,7 +546,11 @@ func printDryRun(envSecrets *config.EnvironmentSecrets, env, appPath string) err
 }
 
 func renderDryRunOutput(envSecrets *config.EnvironmentSecrets, env, appPath string) (string, error) {
-	repoSecret, appOfApps := buildDryRunObjects(envSecrets, env, appPath)
+	return renderDryRunOutputWithOptions(envSecrets, env, appPath, false)
+}
+
+func renderDryRunOutputWithOptions(envSecrets *config.EnvironmentSecrets, env, appPath string, ciliumEnabled bool) (string, error) {
+	repoSecret, appOfApps := buildDryRunObjectsWithOptions(envSecrets, env, appPath, ciliumEnabled)
 
 	repoJSON, err := json.MarshalIndent(repoSecret, "", "  ")
 	if err != nil {
@@ -489,7 +560,6 @@ func renderDryRunOutput(envSecrets *config.EnvironmentSecrets, env, appPath stri
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal app of apps: %w", err)
 	}
-
 	var out bytes.Buffer
 	out.WriteString("\n--- DRY RUN: Kubernetes Secrets ---\n")
 	out.Write(repoJSON)
@@ -501,7 +571,54 @@ func renderDryRunOutput(envSecrets *config.EnvironmentSecrets, env, appPath stri
 	return out.String(), nil
 }
 
+func validateCiliumEnvironment(env string) error {
+	if env == "." || env == ".." || strings.ContainsAny(env, `/\\`) {
+		return fmt.Errorf("environment must be a single path-safe name when Cilium is enabled")
+	}
+	return nil
+}
+
+func runBootstrapComponents(
+	ctx context.Context,
+	ciliumEnabled bool,
+	skipArgoCD bool,
+	installCilium func(context.Context) error,
+	installArgoCD func(context.Context) error,
+) error {
+	if ciliumEnabled {
+		if err := installCilium(ctx); err != nil {
+			return fmt.Errorf("failed to bootstrap Cilium and wait for health: %w", err)
+		}
+	}
+	if skipArgoCD {
+		return nil
+	}
+	if err := installArgoCD(ctx); err != nil {
+		return fmt.Errorf("failed to install ArgoCD: %w", err)
+	}
+	return nil
+}
+
+func ensureArgoCDReadyForCilium(
+	ctx context.Context,
+	ciliumEnabled bool,
+	skipArgoCD bool,
+	waitForArgoCD func(context.Context) error,
+) error {
+	if !ciliumEnabled || !skipArgoCD {
+		return nil
+	}
+	if err := waitForArgoCD(ctx); err != nil {
+		return fmt.Errorf("existing ArgoCD is not ready for Cilium ownership handoff: %w", err)
+	}
+	return nil
+}
+
 func buildDryRunObjects(envSecrets *config.EnvironmentSecrets, env, appPath string) (map[string]interface{}, map[string]interface{}) {
+	return buildDryRunObjectsWithOptions(envSecrets, env, appPath, false)
+}
+
+func buildDryRunObjectsWithOptions(envSecrets *config.EnvironmentSecrets, env, appPath string, enableCilium bool) (map[string]interface{}, map[string]interface{}) {
 	repoSecret := map[string]interface{}{
 		"apiVersion": "v1",
 		"kind":       "Secret",
@@ -525,6 +642,20 @@ func buildDryRunObjects(envSecrets *config.EnvironmentSecrets, env, appPath stri
 		},
 	}
 
+	helmValues := map[string]interface{}{
+		"valueFiles": []string{
+			fmt.Sprintf("values/%s.yaml", env),
+		},
+	}
+	if enableCilium {
+		helmValues["parameters"] = []map[string]string{
+			{
+				"name":  "components.cilium.enabled",
+				"value": "true",
+			},
+		}
+	}
+
 	appOfApps := map[string]interface{}{
 		"apiVersion": "argoproj.io/v1alpha1",
 		"kind":       "Application",
@@ -538,11 +669,7 @@ func buildDryRunObjects(envSecrets *config.EnvironmentSecrets, env, appPath stri
 				"repoURL":        envSecrets.Repo.URL,
 				"targetRevision": envSecrets.Repo.TargetRevision,
 				"path":           appPath,
-				"helm": map[string]interface{}{
-					"valueFiles": []string{
-						fmt.Sprintf("values/%s.yaml", env),
-					},
-				},
+				"helm":           helmValues,
 			},
 			"destination": map[string]interface{}{
 				"server":    "https://kubernetes.default.svc",

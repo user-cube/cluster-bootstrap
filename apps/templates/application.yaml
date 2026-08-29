@@ -8,8 +8,10 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: {{ $config.syncWave | quote }}
+  {{- if or (not (hasKey $config "cascadeDelete")) $config.cascadeDelete }}
   finalizers:
     - resources-finalizer.argocd.argoproj.io
+  {{- end }}
 spec:
   project: default
   source:
@@ -18,6 +20,9 @@ spec:
     path: {{ if $.Values.repo.basePath }}{{ $.Values.repo.basePath }}/{{ end }}components/{{ $name }}
     {{- if or (not (hasKey $config "hasValues")) $config.hasValues }}
     helm:
+      {{- with $config.releaseName }}
+      releaseName: {{ . }}
+      {{- end }}
       valueFiles:
         - values/base.yaml
         - values/{{ $.Values.environment }}.yaml

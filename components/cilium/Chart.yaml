@@ -1,0 +1,9 @@
+apiVersion: v2
+name: cilium
+description: Cilium CNI component managed by ArgoCD after bootstrap
+version: 1.0.0
+type: application
+dependencies:
+  - name: cilium
+    version: 1.20.1
+    repository: https://helm.cilium.io/

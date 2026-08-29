@@ -35,6 +35,7 @@ nav:
       - Repo Structure: architecture/repo-structure.md
   - Components:
       - Overview: components/index.md
+      - Cilium: components/cilium.md
       - ArgoCD: components/argocd.md
       - Vault: components/vault.md
       - External Secrets: components/external-secrets.md

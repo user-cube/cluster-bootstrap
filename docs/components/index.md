@@ -1,11 +1,12 @@
 # Components Overview
 
-All platform components are deployed as ArgoCD Applications through the App of Apps pattern. Each component lives under `components/<name>/` as a Helm chart wrapper.
+Platform components are deployed as ArgoCD Applications backed by Helm chart wrappers under `components/<name>/`. Cilium is a special opt-in bootstrap component: the CLI installs it before ArgoCD, then creates its Application after ArgoCD is ready.
 
 ## Component Table
 
 | Component | Namespace | Sync Wave | Upstream Chart | Version |
 |-----------|-----------|-----------|---------------|---------|
+| [Cilium](cilium.md) | `kube-system` | Bootstrap | `cilium` | 1.20.1 |
 | [ArgoCD](argocd.md) | `argocd` | 0 | `argo-cd` | 7.8.13 |
 | [Vault](vault.md) | `vault` | 1 | `vault` | 0.29.1 |
 | [External Secrets](external-secrets.md) | `external-secrets` | 1 | `external-secrets` | 0.14.3 |
