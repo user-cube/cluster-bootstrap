@@ -380,8 +380,8 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		sopsAgeKeyCreated, err := storeSopsAgeKeySecret(ctx, client, bootstrapAgeKey)
 		if err != nil {
 			bootstrapErr = fmt.Errorf("failed to create sops-age-key secret: %w", err)
-			report.AddStage(secretsK8sTimer.complete(false, err))
-			return err
+			report.AddStage(secretsK8sTimer.complete(false, bootstrapErr))
+			return bootstrapErr
 		}
 		report.Resources.Secrets = append(report.Resources.Secrets, SecretReport{
 			Name:      "sops-age-key",
