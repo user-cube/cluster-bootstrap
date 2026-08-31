@@ -13,18 +13,54 @@ cluster-bootstrap-cli bootstrap dev
 ## What it does
 
 1. Loads secrets — decrypts via SOPS (default) or reads plaintext git-crypt files
-2. Creates the `argocd` namespace
-3. Creates the `repo-ssh-key` Secret with Git SSH credentials
-4. Optionally creates `git-crypt-key` when `--gitcrypt-key-file` is provided, or `sops-age-key` when `--store-sops-age-key` is set
-5. When `--enable-cilium` is set, installs or upgrades Cilium and waits for Helm's workload readiness checks to pass
-6. Installs ArgoCD via Helm (from `components/argocd/`)
-7. Deploys the App of Apps root Application, enabling its repository-backed Cilium Application when requested
-8. Optionally waits for cluster components to be ready (if `--wait-for-health` provided)
-9. Prints ArgoCD access instructions
+2. Checks the target cluster for an existing App of Apps and stops unless `--force` is set
+3. Announces the target Kubernetes context and counts down for 10 seconds so the run can be aborted
+4. Creates the `argocd` namespace
+5. Creates the `repo-ssh-key` Secret with Git SSH credentials
+6. Optionally creates `git-crypt-key` when `--gitcrypt-key-file` is provided, or `sops-age-key` when `--store-sops-age-key` is set
+7. When `--enable-cilium` is set, installs or upgrades Cilium and waits for Helm's workload readiness checks to pass
+8. Installs ArgoCD via Helm (from `components/argocd/`)
+9. Deploys the App of Apps root Application, enabling its repository-backed Cilium Application when requested
+10. Optionally waits for cluster components to be ready (if `--wait-for-health` provided)
+11. Prints ArgoCD access instructions
+
+## Safeguards
+
+Before anything is written to the cluster, bootstrap performs two checks.
+
+### Existing App of Apps
+
+An `app-of-apps` Application in the `argocd` namespace means the cluster has already been bootstrapped. Bootstrap stops and reports what it found, without changing the cluster:
+
+```
+  Existing App of Apps:
+    Application:  app-of-apps (namespace argocd)
+    Repository:   git@github.com:acme/repo.git
+    Revision:     main
+    Path:         apps
+    Sync/Health:  Synced / Healthy
+
+ERROR cluster already bootstrapped: App of Apps "app-of-apps" exists in namespace argocd on context kind-dev
+  hint: inspect the existing installation with: cluster-bootstrap-cli info <environment>
+  tip: re-run with --force to overwrite the existing App of Apps
+```
+
+Pass `--force` to re-run against an already bootstrapped cluster. The existing App of Apps is still reported, then overwritten with the current configuration.
+
+### Target context countdown
+
+Bootstrap prints the Kubernetes context it is about to modify and waits 10 seconds so a run against the wrong cluster can be aborted with `Ctrl+C`:
+
+```
+⚠  Bootstrap will modify the cluster on Kubernetes context: kind-dev
+    Starting in  7s... press Ctrl+C to abort
+```
+
+The context shown is the resolved one: the `--context` override when given, otherwise the current context of the kubeconfig in use. The countdown is skipped with `--yes`, and automatically when stdout is not a terminal, so CI pipelines are not delayed.
 
 ## Idempotent Behavior
 
-The bootstrap command is **fully idempotent** and can be safely run multiple times without causing errors or conflicts:
+Bootstrap is idempotent, so re-running it with `--force` after configuration changes or secret updates converges the cluster instead of failing:
 
 - **Namespace**: Verified and created only if it doesn't exist
 - **Secrets**: Automatically updated if they already exist, created otherwise
@@ -42,7 +78,7 @@ When running the command multiple times, you'll see clear feedback indicating wh
   ✓ App of Apps updated successfully
 ```
 
-This makes bootstrap safe to re-run after configuration changes, secret updates, or as part of GitOps workflows.
+Without `--force`, the first run is the only one that reaches these steps — the safeguard above stops later runs.
 
 ## Flags
 
@@ -64,6 +100,8 @@ This makes bootstrap safe to re-run after configuration changes, secret updates,
 | `--health-timeout` | `180` | Timeout in seconds for health checks (default 180 = 3 minutes) |
 | `--report-format` | `summary` | Report format: `summary`, `json`, or `none` |
 | `--report-output` | — | Write JSON report to file |
+| `--force` | `false` | Bootstrap even if the cluster already has an App of Apps, overwriting it. Without this flag, bootstrap stops on an already bootstrapped cluster |
+| `--yes`, `-y` | `false` | Skip the 10 second countdown before the cluster is modified. Already skipped when stdout is not a terminal |
 
 When `--enable-cilium` and `--skip-argocd-install` are combined, the CLI waits for the existing `argocd-server` deployment before applying the App of Apps with Cilium enabled.
 
@@ -92,6 +130,9 @@ cluster-bootstrap-cli bootstrap dev \
 
 # Dry run to a file
 cluster-bootstrap-cli bootstrap dev --dry-run --dry-run-output /tmp/bootstrap.json
+
+# Re-run against an already bootstrapped cluster, without the countdown
+cluster-bootstrap-cli bootstrap dev --force --yes
 
 # Repo content in a subdirectory
 # First, update apps/values.yaml to set repo.basePath: "k8s"

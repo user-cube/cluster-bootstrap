@@ -26,14 +26,15 @@ type InfoResult struct {
 
 // ArgoCDAppInfo holds ArgoCD Application information
 type ArgoCDAppInfo struct {
-	Name         string
-	Namespace    string
-	SyncStatus   string
-	HealthStatus string
-	Destination  string
-	RepoURL      string
-	Path         string
-	SyncWave     string
+	Name           string
+	Namespace      string
+	SyncStatus     string
+	HealthStatus   string
+	Destination    string
+	RepoURL        string
+	TargetRevision string
+	Path           string
+	SyncWave       string
 }
 
 // ComponentInfo holds information about a component
@@ -394,6 +395,9 @@ func parseArgoCDApplication(obj *unstructured.Unstructured) ArgoCDAppInfo {
 		if source, ok := spec["source"].(map[string]interface{}); ok {
 			if repoURL, ok := source["repoURL"].(string); ok {
 				app.RepoURL = repoURL
+			}
+			if targetRevision, ok := source["targetRevision"].(string); ok {
+				app.TargetRevision = targetRevision
 			}
 			if path, ok := source["path"].(string); ok {
 				app.Path = path

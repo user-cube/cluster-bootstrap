@@ -98,7 +98,19 @@ type ConfigReport struct {
 	DryRun            bool   `json:"dry_run"`
 	SkipArgoCDInstall bool   `json:"skip_argocd_install"`
 	EnableCilium      bool   `json:"enable_cilium,omitempty"`
+	Force             bool   `json:"force,omitempty"`
 	WaitForHealth     bool   `json:"wait_for_health"`
+}
+
+// anyReported reports whether bootstrap reached any resource, so an early abort
+// prints no resource section instead of zero-valued entries.
+func (r ResourceReport) anyReported() bool {
+	return r.Namespace.Name != "" ||
+		len(r.Secrets) > 0 ||
+		r.CiliumRelease != nil ||
+		r.ArgoCDRelease.Name != "" ||
+		r.CiliumApplication != nil ||
+		r.AppOfApps.Name != ""
 }
 
 // NewBootstrapReport creates a new bootstrap report.
@@ -179,32 +191,41 @@ func (r *BootstrapReport) PrintSummary() {
 		fmt.Printf("  %s %-30s %8s\n", stageStatus, stage.Name, stage.Duration)
 	}
 
-	// Resources
-	fmt.Println()
-	fmt.Println("📦 Resources:")
-	fmt.Printf("  Namespace:     %s (%s)\n", r.Resources.Namespace.Name, statusText(r.Resources.Namespace.Created, "created", "verified"))
+	// Resources. A resource is only reported once bootstrap actually reached it,
+	// so a run that aborted early does not claim resources were touched.
+	if r.Resources.anyReported() {
+		fmt.Println()
+		fmt.Println("📦 Resources:")
+		if r.Resources.Namespace.Name != "" {
+			fmt.Printf("  Namespace:     %s (%s)\n", r.Resources.Namespace.Name, statusText(r.Resources.Namespace.Created, "created", "verified"))
+		}
 
-	for _, secret := range r.Resources.Secrets {
-		fmt.Printf("  Secret:        %s/%s (%s)\n", secret.Namespace, secret.Name, statusText(secret.Created, "created", "updated"))
-	}
-	if r.Resources.CiliumRelease != nil {
-		fmt.Printf("  Helm Release:  %s (%s)\n", r.Resources.CiliumRelease.Name, statusText(r.Resources.CiliumRelease.Installed, "installed", "upgraded"))
-	}
+		for _, secret := range r.Resources.Secrets {
+			fmt.Printf("  Secret:        %s/%s (%s)\n", secret.Namespace, secret.Name, statusText(secret.Created, "created", "updated"))
+		}
+		if r.Resources.CiliumRelease != nil {
+			fmt.Printf("  Helm Release:  %s (%s)\n", r.Resources.CiliumRelease.Name, statusText(r.Resources.CiliumRelease.Installed, "installed", "upgraded"))
+		}
 
-	if !r.Resources.ArgoCDRelease.Skipped {
-		fmt.Printf("  Helm Release:  %s (%s)\n", r.Resources.ArgoCDRelease.Name, statusText(r.Resources.ArgoCDRelease.Installed, "installed", "upgraded"))
-	} else {
-		fmt.Printf("  Helm Release:  %s (skipped)\n", r.Resources.ArgoCDRelease.Name)
-	}
+		if r.Resources.ArgoCDRelease.Name != "" {
+			if !r.Resources.ArgoCDRelease.Skipped {
+				fmt.Printf("  Helm Release:  %s (%s)\n", r.Resources.ArgoCDRelease.Name, statusText(r.Resources.ArgoCDRelease.Installed, "installed", "upgraded"))
+			} else {
+				fmt.Printf("  Helm Release:  %s (skipped)\n", r.Resources.ArgoCDRelease.Name)
+			}
+		}
 
-	if r.Resources.CiliumApplication != nil {
-		if r.Resources.CiliumApplication.ManagedBy != "" {
-			fmt.Printf("  Application:   %s (managed by %s)\n", r.Resources.CiliumApplication.Name, r.Resources.CiliumApplication.ManagedBy)
-		} else {
-			fmt.Printf("  Application:   %s (%s)\n", r.Resources.CiliumApplication.Name, statusText(r.Resources.CiliumApplication.Created, "created", "updated"))
+		if r.Resources.CiliumApplication != nil {
+			if r.Resources.CiliumApplication.ManagedBy != "" {
+				fmt.Printf("  Application:   %s (managed by %s)\n", r.Resources.CiliumApplication.Name, r.Resources.CiliumApplication.ManagedBy)
+			} else {
+				fmt.Printf("  Application:   %s (%s)\n", r.Resources.CiliumApplication.Name, statusText(r.Resources.CiliumApplication.Created, "created", "updated"))
+			}
+		}
+		if r.Resources.AppOfApps.Name != "" {
+			fmt.Printf("  Application:   %s (%s)\n", r.Resources.AppOfApps.Name, statusText(r.Resources.AppOfApps.Created, "created", "updated"))
 		}
 	}
-	fmt.Printf("  Application:   %s (%s)\n", r.Resources.AppOfApps.Name, statusText(r.Resources.AppOfApps.Created, "created", "updated"))
 
 	// Health checks
 	if r.Health != nil && r.Health.Checked {

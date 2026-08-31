@@ -18,18 +18,7 @@ type Client struct {
 // If kubeconfig is empty, it uses the default loading rules.
 // If context is empty, it uses the current context.
 func NewClient(kubeconfig, context string) (*Client, error) {
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	if kubeconfig != "" {
-		loadingRules.ExplicitPath = kubeconfig
-	}
-
-	configOverrides := &clientcmd.ConfigOverrides{}
-	if context != "" {
-		configOverrides.CurrentContext = context
-	}
-
-	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		loadingRules, configOverrides).ClientConfig()
+	config, err := clientConfig(kubeconfig, context).ClientConfig()
 	if err != nil {
 		return nil, wrapKubeconfigError(err, kubeconfig, context)
 	}
@@ -48,6 +37,40 @@ func NewClient(kubeconfig, context string) (*Client, error) {
 		Clientset:     clientset,
 		DynamicClient: dynClient,
 	}, nil
+}
+
+// clientConfig builds the kubeconfig loader shared by NewClient and ResolveContext,
+// so both resolve the same context for the same arguments.
+func clientConfig(kubeconfig, context string) clientcmd.ClientConfig {
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	if kubeconfig != "" {
+		loadingRules.ExplicitPath = kubeconfig
+	}
+
+	configOverrides := &clientcmd.ConfigOverrides{}
+	if context != "" {
+		configOverrides.CurrentContext = context
+	}
+
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+}
+
+// ResolveContext returns the kubeconfig context that NewClient would connect to
+// for the same arguments: the explicit override when given, otherwise the
+// current context of the resolved kubeconfig.
+func ResolveContext(kubeconfig, context string) (string, error) {
+	if context != "" {
+		return context, nil
+	}
+
+	raw, err := clientConfig(kubeconfig, context).RawConfig()
+	if err != nil {
+		return "", wrapKubeconfigError(err, kubeconfig, context)
+	}
+	if raw.CurrentContext == "" {
+		return "", fmt.Errorf("no current context set in kubeconfig\n  hint: select a context with: kubectl config use-context <name>\n  tip: or pass --context explicitly")
+	}
+	return raw.CurrentContext, nil
 }
 
 // wrapKubeconfigError enhances error messages for kubeconfig issues.

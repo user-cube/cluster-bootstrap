@@ -109,7 +109,9 @@ This will:
 5. Install ArgoCD via Helm
 6. Deploy the root **App of Apps** Application, enabling its Cilium child Application when requested
 
-> **💡 Idempotent by design**: The bootstrap command can be safely run multiple times. It automatically detects existing resources and updates them instead of failing. Perfect for configuration updates or GitOps workflows.
+Before touching the cluster, bootstrap announces the target Kubernetes context with a 10 second countdown (skip with `--yes`), and stops if the cluster already has an App of Apps.
+
+> **🛡️ Safe by default**: A cluster that already has an `app-of-apps` Application is reported and left untouched. Re-run with `--force` to bootstrap it again — the operations themselves are idempotent, detecting existing resources and updating them instead of failing.
 
 #### Bootstrap Reports
 
@@ -217,7 +219,7 @@ The `apps/` chart uses a **single dynamic template** that iterates over a `compo
 
 | Command | Description |
 |---------|-------------|
-| `bootstrap <env>` | Full cluster bootstrap (decrypt secrets, install ArgoCD, deploy App of Apps). Generates comprehensive reports with timing metrics and resource operations. Fully idempotent. |
+| `bootstrap <env>` | Full cluster bootstrap (decrypt secrets, install ArgoCD, deploy App of Apps). Generates comprehensive reports with timing metrics and resource operations. Stops on an already bootstrapped cluster unless `--force` is passed; idempotent when forced. |
 | `template customize` | Customize the template with your organization and repository (replaces placeholders in configs, docs, and code) |
 | `doctor` | Run prerequisite checks for tooling and cluster access |
 | `status <env>` | Show cluster status and component information |
