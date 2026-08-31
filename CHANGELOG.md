@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.9.0...v1.10.0) (2026-08-31)
+
+
+### Features
+
+* guard bootstrap against an existing App of Apps and announce the target context ([#77](https://github.com/user-cube/cluster-bootstrap/issues/77)) ([28ea0be](https://github.com/user-cube/cluster-bootstrap/commit/28ea0be3b2adc6d30b89312e36f92f826e41f0c4))
+
 # [1.9.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.8.0...v1.9.0) (2026-08-29)
 
 
