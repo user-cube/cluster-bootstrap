@@ -26,7 +26,7 @@ type appOfAppsGetter interface {
 // announceTargetContext tells the operator which cluster is about to be modified.
 // When interactive, it counts down so the bootstrap can still be aborted with Ctrl+C.
 func announceTargetContext(out io.Writer, kubeContext string, seconds int, interactive bool) {
-	fmt.Fprintf(out, "\n%s Bootstrap will modify the cluster on Kubernetes context: %s\n",
+	_, _ = fmt.Fprintf(out, "\n%s Bootstrap will modify the cluster on Kubernetes context: %s\n",
 		warningColor("⚠ "), stepColor(kubeContext))
 
 	if !interactive || seconds <= 0 {
@@ -34,10 +34,10 @@ func announceTargetContext(out io.Writer, kubeContext string, seconds int, inter
 	}
 
 	for remaining := seconds; remaining > 0; remaining-- {
-		fmt.Fprintf(out, "\r    Starting in %2ds... press Ctrl+C to abort", remaining)
+		_, _ = fmt.Fprintf(out, "\r    Starting in %2ds... press Ctrl+C to abort", remaining)
 		time.Sleep(countdownInterval)
 	}
-	fmt.Fprintf(out, "\r    Starting now...                            \n")
+	_, _ = fmt.Fprintf(out, "\r    Starting now...                            \n")
 }
 
 // guardExistingAppOfApps refuses to bootstrap a cluster that already has an App
@@ -67,22 +67,22 @@ func guardExistingAppOfApps(ctx context.Context, client appOfAppsGetter, kubeCon
 }
 
 func printExistingAppOfApps(out io.Writer, app ArgoCDAppInfo) {
-	fmt.Fprintf(out, "\n  Existing App of Apps:\n")
-	fmt.Fprintf(out, "    Application:  %s (namespace %s)\n", app.Name, app.Namespace)
+	_, _ = fmt.Fprintf(out, "\n  Existing App of Apps:\n")
+	_, _ = fmt.Fprintf(out, "    Application:  %s (namespace %s)\n", app.Name, app.Namespace)
 	if app.RepoURL != "" {
-		fmt.Fprintf(out, "    Repository:   %s\n", app.RepoURL)
+		_, _ = fmt.Fprintf(out, "    Repository:   %s\n", app.RepoURL)
 	}
 	if app.TargetRevision != "" {
-		fmt.Fprintf(out, "    Revision:     %s\n", app.TargetRevision)
+		_, _ = fmt.Fprintf(out, "    Revision:     %s\n", app.TargetRevision)
 	}
 	if app.Path != "" {
-		fmt.Fprintf(out, "    Path:         %s\n", app.Path)
+		_, _ = fmt.Fprintf(out, "    Path:         %s\n", app.Path)
 	}
 	if app.SyncStatus != "" || app.HealthStatus != "" {
-		fmt.Fprintf(out, "    Sync/Health:  %s / %s\n",
+		_, _ = fmt.Fprintf(out, "    Sync/Health:  %s / %s\n",
 			orUnknown(app.SyncStatus), orUnknown(app.HealthStatus))
 	}
-	fmt.Fprintln(out)
+	_, _ = fmt.Fprintln(out)
 }
 
 func orUnknown(value string) string {
