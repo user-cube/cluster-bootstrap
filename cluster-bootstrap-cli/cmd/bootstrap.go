@@ -34,6 +34,8 @@ var (
 	healthTimeout     int
 	reportFormat      string
 	reportOutput      string
+	bootstrapForce    bool
+	bootstrapYes      bool
 )
 
 type sopsAgeKeySecretCreator interface {
@@ -68,11 +70,17 @@ func init() {
 	bootstrapCmd.Flags().IntVar(&healthTimeout, "health-timeout", 180, "timeout in seconds for health checks (default 180)")
 	bootstrapCmd.Flags().StringVar(&reportFormat, "report-format", "summary", "report format: summary, json, none")
 	bootstrapCmd.Flags().StringVar(&reportOutput, "report-output", "", "write JSON report to file")
+	bootstrapCmd.Flags().BoolVar(&bootstrapForce, "force", false, "bootstrap even if the cluster already has an App of Apps, overwriting it")
+	bootstrapCmd.Flags().BoolVarP(&bootstrapYes, "yes", "y", false, "skip the countdown before the cluster is modified")
 
 	rootCmd.AddCommand(bootstrapCmd)
 }
 
 func runBootstrap(cmd *cobra.Command, args []string) error {
+	// Flags parsed successfully, so any error from here is a runtime failure:
+	// print it on its own instead of burying it under the usage text.
+	cmd.SilenceUsage = true
+
 	env := args[0]
 
 	// Validate report format
@@ -132,6 +140,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		DryRun:            dryRun,
 		SkipArgoCDInstall: skipArgoCDInstall,
 		EnableCilium:      enableCilium,
+		Force:             bootstrapForce,
 		WaitForHealth:     waitForHealth,
 	}
 
@@ -194,6 +203,20 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	}
 	report.AddStage(validationTimer.complete(true, nil))
 
+	// Resolve the kubeconfig context up front so every message names the cluster
+	// that is actually targeted, not just an explicit --context override.
+	targetContext, contextErr := k8s.ResolveContext(kubeconfig, kubeContext)
+	if contextErr != nil {
+		// Not fatal: dry runs need no cluster, and client creation reports real
+		// connection problems with a better message.
+		targetContext = kubeContext
+		if targetContext == "" {
+			targetContext = "(current kubeconfig context)"
+		}
+	} else {
+		report.Configuration.Context = targetContext
+	}
+
 	// Log configuration
 	configStage := logger.Stage("Configuration")
 	configStage.Detail("Environment: %s", env)
@@ -209,8 +232,8 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	if kubeconfig != "" {
 		configStage.Detail("Kubeconfig: %s", kubeconfig)
 	}
-	if kubeContext != "" {
-		configStage.Detail("Context: %s", kubeContext)
+	if targetContext != "" {
+		configStage.Detail("Context: %s", targetContext)
 	}
 	if dryRun {
 		configStage.Detail("⚠ DRY RUN mode - no changes will be applied")
@@ -308,6 +331,18 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	report.AddStage(k8sTimer.complete(true, nil))
 
 	ctx := context.Background()
+
+	// Safeguard: an existing App of Apps means the cluster is already bootstrapped.
+	// Check before anything is mutated so an abort leaves the cluster untouched.
+	guardTimer := startStage("App of Apps Safeguard")
+	if err := guardExistingAppOfApps(ctx, client, targetContext, bootstrapForce); err != nil {
+		bootstrapErr = err
+		report.AddStage(guardTimer.complete(false, err))
+		return err
+	}
+	report.AddStage(guardTimer.complete(true, nil))
+
+	announceTargetContext(os.Stdout, targetContext, bootstrapCountdownSeconds, !bootstrapYes && isInteractiveTerminal())
 
 	// Create Kubernetes secrets (before Helm install, as the chart may reference them)
 	secretsK8sTimer := startStage("Creating K8s Resources")

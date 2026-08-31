@@ -26,6 +26,8 @@ var rootCmd = &cobra.Command{
 	Long: `cluster-bootstrap is a CLI tool that replaces the manual bootstrap process.
 It uses SOPS-encrypted secrets to configure ArgoCD, create Kubernetes secrets,
 and deploy the App of Apps pattern.`,
+	// Execute prints errors itself; without this cobra prints them a second time.
+	SilenceErrors: true,
 }
 
 func Execute() {

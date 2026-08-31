@@ -23,6 +23,7 @@ type MockClient struct {
 	CreateGitCryptKeyErr     error
 	CreateSopsAgeKeyErr      error
 	ApplyAppOfAppsErr        error
+	GetAppOfAppsErr          error
 	EnsureNamespaceForbidden bool
 	CreateSecretForbidden    bool
 }
@@ -154,6 +155,18 @@ func (m *MockClient) CreateSopsAgeKeySecret(ctx context.Context, keyData []byte)
 	return created, nil
 }
 
+// GetAppOfApps returns the stored App of Apps Application, or nil when absent.
+func (m *MockClient) GetAppOfApps(ctx context.Context) (*unstructured.Unstructured, error) {
+	if m.GetAppOfAppsErr != nil {
+		return nil, m.GetAppOfAppsErr
+	}
+	app, exists := m.Applications[AppOfAppsName]
+	if !exists {
+		return nil, nil
+	}
+	return app, nil
+}
+
 // ApplyAppOfApps simulates Application CR creation.
 func (m *MockClient) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, enableCilium, dryRun bool) (string, bool, error) {
 	if m.ApplyAppOfAppsErr != nil {
@@ -167,12 +180,12 @@ func (m *MockClient) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision
 
 	// Check if application already exists to determine created vs updated
 	created := true
-	if _, exists := m.Applications["app-of-apps"]; exists {
+	if _, exists := m.Applications[AppOfAppsName]; exists {
 		created = false
 	}
 
 	if !dryRun {
-		m.Applications["app-of-apps"] = app
+		m.Applications[AppOfAppsName] = app
 	}
 
 	return "", created, nil
@@ -198,5 +211,6 @@ type ClientInterface interface {
 	CreateRepoSSHSecret(ctx context.Context, repoURL, sshPrivateKey string, dryRun bool) (*corev1.Secret, bool, error)
 	CreateGitCryptKeySecret(ctx context.Context, keyData []byte) (bool, error)
 	CreateSopsAgeKeySecret(ctx context.Context, keyData []byte) (bool, error)
+	GetAppOfApps(ctx context.Context) (*unstructured.Unstructured, error)
 	ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, enableCilium, dryRun bool) (string, bool, error)
 }

@@ -213,6 +213,27 @@ Common issues and solutions when using the cluster-bootstrap CLI.
 
 ## ArgoCD & Application
 
+### Cluster already bootstrapped
+
+**Error:** `cluster already bootstrapped: App of Apps "app-of-apps" exists in namespace argocd on context <context>`
+
+The cluster already has an App of Apps root Application, so bootstrap stopped without changing anything. Its repository, revision, path and sync status are printed above the error.
+
+**Solution:**
+1. Confirm you targeted the intended cluster — the context is named in the error:
+   ```bash
+   kubectl config current-context
+   ```
+2. Inspect the existing installation:
+   ```bash
+   ./cluster-bootstrap-cli/cluster-bootstrap-cli info dev
+   kubectl -n argocd get application app-of-apps -o yaml
+   ```
+3. If re-bootstrapping is intended, overwrite the existing App of Apps:
+   ```bash
+   ./cluster-bootstrap-cli/cluster-bootstrap-cli bootstrap dev --force
+   ```
+
 ### Application CRD not found
 
 **Error:** `ArgoCD CRD not found: ApplicationCRD not found`

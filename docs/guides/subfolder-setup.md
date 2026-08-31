@@ -293,8 +293,8 @@ The app-of-apps needs to be refreshed/synced:
 kubectl patch application app-of-apps -n argocd --type merge \
   -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'
 
-# Option 2: Re-run bootstrap (idempotent)
-./cluster-bootstrap-cli/cluster-bootstrap-cli --base-dir ./k8s bootstrap dev --app-path k8s/apps
+# Option 2: Re-run bootstrap (--force is required once the cluster has an App of Apps)
+./cluster-bootstrap-cli/cluster-bootstrap-cli --base-dir ./k8s bootstrap dev --app-path k8s/apps --force
 
 # Option 3: Use ArgoCD UI
 # Navigate to app-of-apps → Click "Refresh" → Select "Hard Refresh"

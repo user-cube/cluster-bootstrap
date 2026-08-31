@@ -13,6 +13,29 @@ import (
 
 const argoCDNamespace = "argocd"
 
+// AppOfAppsName is the name of the root Application deployed by bootstrap.
+const AppOfAppsName = "app-of-apps"
+
+var applicationGVR = schema.GroupVersionResource{
+	Group:    "argoproj.io",
+	Version:  "v1alpha1",
+	Resource: "applications",
+}
+
+// GetAppOfApps returns the App of Apps root Application already present in the
+// cluster, or nil when it does not exist. A missing ArgoCD Application CRD is
+// also reported as absent, since no App of Apps can exist without it.
+func (c *Client) GetAppOfApps(ctx context.Context) (*unstructured.Unstructured, error) {
+	app, err := c.DynamicClient.Resource(applicationGVR).Namespace(argoCDNamespace).Get(ctx, AppOfAppsName, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to look up the existing App of Apps: %w\n  hint: verify your role can read applications.argoproj.io in the argocd namespace\n  tip: try: kubectl -n argocd get application app-of-apps", err)
+	}
+	return app, nil
+}
+
 // ApplyAppOfApps creates or updates the App of Apps root Application CR.
 // Returns a boolean indicating if it was created (true) or updated (false) when not in dry-run mode.
 func (c *Client) ApplyAppOfApps(ctx context.Context, repoURL, targetRevision, env, appPath string, enableCilium, dryRun bool) (string, bool, error) {
@@ -40,7 +63,7 @@ func buildAppOfApps(repoURL, targetRevision, env, appPath string, enableCilium b
 			"apiVersion": "argoproj.io/v1alpha1",
 			"kind":       "Application",
 			"metadata": map[string]interface{}{
-				"name":      "app-of-apps",
+				"name":      AppOfAppsName,
 				"namespace": argoCDNamespace,
 			},
 			"spec": map[string]interface{}{
@@ -77,17 +100,11 @@ func (c *Client) applyApplication(ctx context.Context, app *unstructured.Unstruc
 		return string(data), true, nil
 	}
 
-	gvr := schema.GroupVersionResource{
-		Group:    "argoproj.io",
-		Version:  "v1alpha1",
-		Resource: "applications",
-	}
-
 	// Check if Application already exists
-	_, err := c.DynamicClient.Resource(gvr).Namespace(argoCDNamespace).Get(ctx, name, metav1.GetOptions{})
+	_, err := c.DynamicClient.Resource(applicationGVR).Namespace(argoCDNamespace).Get(ctx, name, metav1.GetOptions{})
 	exists := err == nil
 
-	_, err = c.DynamicClient.Resource(gvr).Namespace(argoCDNamespace).Apply(
+	_, err = c.DynamicClient.Resource(applicationGVR).Namespace(argoCDNamespace).Apply(
 		ctx, name, app, metav1.ApplyOptions{FieldManager: "cluster-bootstrap"},
 	)
 	if err != nil {
