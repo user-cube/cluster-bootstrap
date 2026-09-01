@@ -234,6 +234,7 @@ The `apps/` chart uses a **single dynamic template** that iterates over a `compo
 |------|---------|-------------|
 | `--base-dir` | `.` | Base directory for repo content (local file resolution) |
 | `-v, --verbose` | `false` | Enable verbose output |
+| `--verbose-with-templates` | `false` | Write rendered Helm manifests to a file during bootstrap (implies verbose; output may contain sensitive values) |
 
 ## Development
 

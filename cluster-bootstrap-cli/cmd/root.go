@@ -9,8 +9,9 @@ import (
 )
 
 var (
-	verbose bool
-	baseDir string
+	verbose              bool
+	verboseWithTemplates bool
+	baseDir              string
 )
 
 var (
@@ -55,5 +56,6 @@ func errorf(format string, args ...interface{}) {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
+	rootCmd.PersistentFlags().BoolVar(&verboseWithTemplates, "verbose-with-templates", false, "write rendered Helm manifests to a file during bootstrap (implies --verbose; may expose sensitive values)")
 	rootCmd.PersistentFlags().StringVar(&baseDir, "base-dir", ".", "base directory for repo content")
 }

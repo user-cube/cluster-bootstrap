@@ -17,6 +17,8 @@ cluster-bootstrap-cli bootstrap dev --enable-cilium
 5. The App of Apps creates an ArgoCD Application named `cilium`, pointing at `components/cilium/` in the configured repository and target revision.
 6. ArgoCD renders the same chart version, release name, namespace, base values, and environment values used by bootstrap.
 
+When the effective Cilium values enable any Prometheus `ServiceMonitor` (agent, operator, or Hubble), bootstrap first checks for the Prometheus Operator `ServiceMonitor` CRD. If it is absent, bootstrap installs the repository-pinned `prometheus-operator-crds` Helm component, waits for the API to become discoverable, and then installs Cilium. This preserves the usual Cilium-before-ArgoCD order while ensuring monitoring resources can be created.
+
 This matching configuration lets ArgoCD take over the existing resources without a second release identity. Re-running bootstrap with the flag upgrades the same Helm release and reapplies the App of Apps configuration. Running without the flag does not install Cilium and leaves the default App of Apps manifest unchanged.
 
 Because Cilium provides cluster networking, its Application deliberately has no cascading resource finalizer. Automated sync, pruning, and self-healing remain enabled, but deleting the Application cannot cascade into removal of the CNI.

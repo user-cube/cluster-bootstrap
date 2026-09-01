@@ -20,6 +20,12 @@ func TestCiliumFlagIsOptIn(t *testing.T) {
 	assert.Equal(t, "false", flag.DefValue)
 }
 
+func TestVerboseWithTemplatesFlagIsOptIn(t *testing.T) {
+	flag := rootCmd.PersistentFlags().Lookup("verbose-with-templates")
+	require.NotNil(t, flag)
+	assert.Equal(t, "false", flag.DefValue)
+}
+
 func TestStoreSopsAgeKeyFlagIsOptIn(t *testing.T) {
 	flag := bootstrapCmd.Flags().Lookup("store-sops-age-key")
 	require.NotNil(t, flag)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -15,9 +16,11 @@ import (
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/cli"
+	"helm.sh/helm/v3/pkg/engine"
 	"helm.sh/helm/v3/pkg/getter"
 	"helm.sh/helm/v3/pkg/repo"
 	"helm.sh/helm/v3/pkg/storage/driver"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/memory"
@@ -43,16 +46,21 @@ type componentConfig struct {
 	dependencyName   string
 	installWrapper   bool
 	envOverridesBase bool
+	hasValues        bool
 	wait             bool
 	timeout          time.Duration
 }
 
 var (
-	argoCDComponent = componentConfig{
+	installComponentFn           = installComponent
+	serviceMonitorCRDAvailableFn = serviceMonitorCRDAvailable
+	waitForServiceMonitorCRDFn   = waitForServiceMonitorCRD
+	argoCDComponent              = componentConfig{
 		name:           "argocd",
 		releaseName:    argoCDRelease,
 		namespace:      argoCDNamespace,
 		dependencyName: argoCDChartDep,
+		hasValues:      true,
 		wait:           true,
 		timeout:        componentTimeout,
 	}
@@ -63,8 +71,17 @@ var (
 		dependencyName:   ciliumChartDep,
 		installWrapper:   true,
 		envOverridesBase: true,
+		hasValues:        true,
 		wait:             true,
 		timeout:          componentTimeout,
+	}
+	prometheusOperatorCRDsComponent = componentConfig{
+		name:           "prometheus-operator-crds",
+		releaseName:    "prometheus-operator-crds",
+		namespace:      "monitoring",
+		dependencyName: "prometheus-operator-crds",
+		wait:           true,
+		timeout:        componentTimeout,
 	}
 )
 
@@ -114,17 +131,39 @@ func loadChartConfig(baseDir, componentName, dependencyName string) (name, versi
 // then runs helm upgrade --install with --wait.
 // Returns helpful error messages for common failure scenarios.
 // Returns a boolean indicating if it was installed (true) or upgraded (false).
-func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir string, verbose bool) (bool, error) {
-	return installComponent(ctx, kubeconfig, kubeContext, env, baseDir, verbose, argoCDComponent)
+func InstallArgoCD(ctx context.Context, kubeconfig, kubeContext, env, baseDir string, verbose, verboseWithTemplates bool, templateOutputPath string) (bool, error) {
+	return installComponent(ctx, kubeconfig, kubeContext, env, baseDir, verbose, verboseWithTemplates, templateOutputPath, argoCDComponent)
 }
 
 // InstallCilium installs or upgrades Cilium using the same Helm bootstrap path as ArgoCD.
 // Helm wait is always enabled, so a successful return is the health barrier before ArgoCD.
-func InstallCilium(ctx context.Context, kubeconfig, kubeContext, env, baseDir string, verbose bool) (bool, error) {
-	return installComponent(ctx, kubeconfig, kubeContext, env, baseDir, verbose, ciliumComponent)
+func InstallCilium(ctx context.Context, kubeconfig, kubeContext, env, baseDir string, verbose, verboseWithTemplates bool, templateOutputPath string) (bool, error) {
+	serviceMonitorsEnabled, err := ciliumServiceMonitorsEnabled(baseDir, env)
+	if err != nil {
+		return false, fmt.Errorf("failed to inspect Cilium monitoring configuration: %w", err)
+	}
+	if serviceMonitorsEnabled {
+		available, err := serviceMonitorCRDAvailableFn(kubeconfig, kubeContext)
+		if err != nil {
+			return false, fmt.Errorf("failed to check for Prometheus Operator ServiceMonitor CRD: %w", err)
+		}
+		if !available {
+			fmt.Println("  Cilium ServiceMonitors are enabled; installing Prometheus Operator CRDs before Cilium...")
+			if _, err := installComponentFn(ctx, kubeconfig, kubeContext, env, baseDir, verbose, verboseWithTemplates, templateOutputPath, prometheusOperatorCRDsComponent); err != nil {
+				return false, fmt.Errorf("failed to install Prometheus Operator CRDs required by Cilium: %w", err)
+			}
+			if err := waitForServiceMonitorCRDFn(ctx, kubeconfig, kubeContext); err != nil {
+				return false, err
+			}
+		} else if verbose {
+			fmt.Println("  Prometheus Operator ServiceMonitor CRD is already installed")
+		}
+	}
+	return installComponentFn(ctx, kubeconfig, kubeContext, env, baseDir, verbose, verboseWithTemplates, templateOutputPath, ciliumComponent)
 }
 
-func installComponent(ctx context.Context, kubeconfig, kubeContext, env, baseDir string, verbose bool, component componentConfig) (bool, error) {
+func installComponent(ctx context.Context, kubeconfig, kubeContext, env, baseDir string, verbose, verboseWithTemplates bool, templateOutputPath string, component componentConfig) (bool, error) {
+	verbose = verbose || verboseWithTemplates
 	settings := cli.New()
 	settings.SetNamespace(component.namespace)
 	if kubeconfig != "" {
@@ -169,6 +208,10 @@ func installComponent(ctx context.Context, kubeconfig, kubeContext, env, baseDir
 
 	if verbose {
 		fmt.Printf("  Chart: %s-%s\n", installChart.Metadata.Name, installChart.Metadata.Version)
+		if component.hasValues {
+			fmt.Printf("  Values: %s\n", filepath.Join(baseDir, "components", component.name, "values", "base.yaml"))
+			fmt.Printf("  Values override: %s\n", filepath.Join(baseDir, "components", component.name, "values", fmt.Sprintf("%s.yaml", env)))
+		}
 	}
 
 	// Check if release exists; if not, install; otherwise upgrade
@@ -178,6 +221,15 @@ func installComponent(ctx context.Context, kubeconfig, kubeContext, env, baseDir
 	releaseExists, historyErr := helmReleaseExists(err)
 	if historyErr != nil {
 		return false, fmt.Errorf("failed to check Helm release %s in namespace %s: %w", component.releaseName, component.namespace, historyErr)
+	}
+	if verboseWithTemplates {
+		manifest, renderErr := renderComponentTemplates(installChart, vals, component, !releaseExists)
+		if renderErr != nil {
+			return false, fmt.Errorf("failed to render %s templates for verbose output: %w", component.name, renderErr)
+		}
+		if err := appendRenderedTemplates(templateOutputPath, component.name, manifest); err != nil {
+			return false, err
+		}
 	}
 
 	if !releaseExists {
@@ -229,6 +281,59 @@ func installComponent(ctx context.Context, kubeconfig, kubeContext, env, baseDir
 	}
 
 	return false, nil
+}
+
+func appendRenderedTemplates(path, componentName, manifest string) error {
+	if path == "" {
+		return fmt.Errorf("template output path is required when verbose templates are enabled")
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600) // #nosec G304 -- bootstrap creates this absolute path beneath --base-dir.
+	if err != nil {
+		return fmt.Errorf("failed to open rendered template output %s: %w", path, err)
+	}
+	if _, err := fmt.Fprintf(file, "# BEGIN RENDERED %s HELM MANIFESTS\n%s# END RENDERED %s HELM MANIFESTS\n", strings.ToUpper(componentName), manifest, strings.ToUpper(componentName)); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("failed to write rendered templates to %s: %w", path, err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("failed to close rendered template output %s: %w", path, err)
+	}
+	return nil
+}
+
+// renderComponentTemplates renders the same chart and merged values that will be
+// passed to Helm. It intentionally does not contact or modify the cluster.
+func renderComponentTemplates(componentChart *chart.Chart, vals map[string]interface{}, component componentConfig, isInstall bool) (string, error) {
+	release := chartutil.ReleaseOptions{
+		Name:      component.releaseName,
+		Namespace: component.namespace,
+		IsInstall: isInstall,
+		IsUpgrade: !isInstall,
+	}
+	renderValues, err := chartutil.ToRenderValues(componentChart, vals, release, chartutil.DefaultCapabilities)
+	if err != nil {
+		return "", fmt.Errorf("failed to prepare template values: %w", err)
+	}
+	rendered, err := engine.Render(componentChart, renderValues)
+	if err != nil {
+		return "", fmt.Errorf("failed to render chart: %w", err)
+	}
+
+	files := make([]string, 0, len(rendered))
+	for name := range rendered {
+		files = append(files, name)
+	}
+	sort.Strings(files)
+
+	var manifest strings.Builder
+	for _, name := range files {
+		contents := strings.TrimSpace(rendered[name])
+		if contents == "" || strings.HasSuffix(name, "NOTES.txt") {
+			continue
+		}
+		fmt.Fprintf(&manifest, "---\n# Source: %s\n%s\n", name, contents)
+	}
+	return manifest.String(), nil
 }
 
 func helmReleaseExists(historyErr error) (bool, error) {
@@ -322,7 +427,85 @@ func loadComponentValues(baseDir, componentName, env string) (map[string]interfa
 }
 
 func loadValuesForComponent(baseDir, env string, component componentConfig) (map[string]interface{}, error) {
+	if !component.hasValues {
+		return map[string]interface{}{}, nil
+	}
 	return loadComponentValuesWithOrder(baseDir, component.name, env, component.envOverridesBase)
+}
+
+func ciliumServiceMonitorsEnabled(baseDir, env string) (bool, error) {
+	values, err := loadValuesForComponent(baseDir, env, ciliumComponent)
+	if err != nil {
+		return false, err
+	}
+	for _, path := range [][]string{
+		{"cilium", "prometheus", "serviceMonitor", "enabled"},
+		{"cilium", "operator", "prometheus", "serviceMonitor", "enabled"},
+		{"cilium", "hubble", "metrics", "serviceMonitor", "enabled"},
+	} {
+		if valueAtPathIsTrue(values, path) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func valueAtPathIsTrue(values map[string]interface{}, path []string) bool {
+	var current interface{} = values
+	for _, key := range path {
+		mapValue, ok := current.(map[string]interface{})
+		if !ok {
+			return false
+		}
+		current = mapValue[key]
+	}
+	enabled, ok := current.(bool)
+	return ok && enabled
+}
+
+func serviceMonitorCRDAvailable(kubeconfig, kubeContext string) (bool, error) {
+	discoveryClient, err := newRESTClientGetter(kubeconfig, kubeContext, "").ToDiscoveryClient()
+	if err != nil {
+		return false, err
+	}
+	resources, err := discoveryClient.ServerResourcesForGroupVersion("monitoring.coreos.com/v1")
+	if isServiceMonitorCRDNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	for _, resource := range resources.APIResources {
+		if resource.Kind == "ServiceMonitor" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func isServiceMonitorCRDNotFound(err error) bool {
+	return apierrors.IsNotFound(err) || errors.Is(err, memory.ErrCacheNotFound)
+}
+
+func waitForServiceMonitorCRD(ctx context.Context, kubeconfig, kubeContext string) error {
+	deadline := time.NewTimer(componentTimeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		available, err := serviceMonitorCRDAvailable(kubeconfig, kubeContext)
+		if err == nil && available {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("waiting for Prometheus Operator ServiceMonitor CRD canceled: %w", ctx.Err())
+		case <-deadline.C:
+			return fmt.Errorf("timed out waiting for Prometheus Operator ServiceMonitor CRD after %s", componentTimeout)
+		case <-ticker.C:
+		}
+	}
 }
 
 func loadComponentValuesWithOrder(baseDir, componentName, env string, envOverridesBase bool) (map[string]interface{}, error) {
