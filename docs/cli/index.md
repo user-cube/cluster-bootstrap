@@ -75,6 +75,7 @@ These flags are available on all commands:
 |------|---------|-------------|
 | `--base-dir` | `.` | Base directory for repo content. Use when K8s manifests live in a subdirectory (e.g. `k8s/`). Affects local file resolution only (Chart.yaml, values, secrets files). |
 | `-v, --verbose` | `false` | Enable verbose output |
+| `--verbose-with-templates` | `false` | Write rendered Helm manifests to a file during bootstrap (implies verbose; output may contain sensitive values) |
 
 ## Commands
 

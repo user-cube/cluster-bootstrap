@@ -1,9 +1,11 @@
 package helm
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/engine"
 	"helm.sh/helm/v3/pkg/storage/driver"
+	"k8s.io/client-go/discovery/cached/memory"
 )
 
 func TestLoadChartConfigForComponent(t *testing.T) {
@@ -58,6 +61,123 @@ func TestLoadComponentValues(t *testing.T) {
 	assert.Equal(t, float64(2), operator["replicas"])
 	hubble := dependency["hubble"].(map[string]interface{})
 	assert.Equal(t, false, hubble["enabled"])
+}
+
+func TestCiliumServiceMonitorsEnabled(t *testing.T) {
+	baseDir := t.TempDir()
+	valuesDir := filepath.Join(baseDir, "components", "cilium", "values")
+	require.NoError(t, os.MkdirAll(valuesDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(valuesDir, "base.yaml"), []byte(`cilium:
+  prometheus:
+    serviceMonitor:
+      enabled: false
+  operator:
+    prometheus:
+      serviceMonitor:
+        enabled: false
+  hubble:
+    metrics:
+      serviceMonitor:
+        enabled: false
+`), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(valuesDir, "homelab.yaml"), []byte(`cilium:
+  hubble:
+    metrics:
+      serviceMonitor:
+        enabled: true
+`), 0600))
+
+	enabled, err := ciliumServiceMonitorsEnabled(baseDir, "homelab")
+	require.NoError(t, err)
+	assert.True(t, enabled)
+
+	disabled, err := ciliumServiceMonitorsEnabled(baseDir, "missing")
+	require.NoError(t, err)
+	assert.False(t, disabled)
+}
+
+func TestPrometheusOperatorCRDsComponentDoesNotRequireValuesFiles(t *testing.T) {
+	assert.Equal(t, "prometheus-operator-crds", prometheusOperatorCRDsComponent.name)
+	assert.False(t, prometheusOperatorCRDsComponent.hasValues)
+
+	values, err := loadValuesForComponent(t.TempDir(), "homelab", prometheusOperatorCRDsComponent)
+	require.NoError(t, err)
+	assert.Empty(t, values)
+}
+
+func TestIsServiceMonitorCRDNotFound(t *testing.T) {
+	assert.True(t, isServiceMonitorCRDNotFound(memory.ErrCacheNotFound))
+	assert.False(t, isServiceMonitorCRDNotFound(errors.New("permission denied")))
+}
+
+func TestInstallCiliumInstallsRequiredCRDsBeforeCilium(t *testing.T) {
+	baseDir := t.TempDir()
+	valuesDir := filepath.Join(baseDir, "components", "cilium", "values")
+	require.NoError(t, os.MkdirAll(valuesDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(valuesDir, "base.yaml"), []byte(`cilium:
+  prometheus:
+    serviceMonitor:
+      enabled: true
+`), 0600))
+
+	previousInstall := installComponentFn
+	previousAvailable := serviceMonitorCRDAvailableFn
+	previousWait := waitForServiceMonitorCRDFn
+	t.Cleanup(func() {
+		installComponentFn = previousInstall
+		serviceMonitorCRDAvailableFn = previousAvailable
+		waitForServiceMonitorCRDFn = previousWait
+	})
+
+	calls := []string{}
+	installComponentFn = func(_ context.Context, _, _, _, _ string, _, _ bool, _ string, component componentConfig) (bool, error) {
+		calls = append(calls, component.name)
+		return true, nil
+	}
+	serviceMonitorCRDAvailableFn = func(_, _ string) (bool, error) { return false, nil }
+	waitForServiceMonitorCRDFn = func(_ context.Context, _, _ string) error {
+		calls = append(calls, "wait-for-servicemonitor-crd")
+		return nil
+	}
+
+	_, err := InstallCilium(context.Background(), "", "", "homelab", baseDir, false, false, "")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"prometheus-operator-crds", "wait-for-servicemonitor-crd", "cilium"}, calls)
+}
+
+func TestInstallCiliumSkipsCRDInstallWhenServiceMonitorCRDExists(t *testing.T) {
+	baseDir := t.TempDir()
+	valuesDir := filepath.Join(baseDir, "components", "cilium", "values")
+	require.NoError(t, os.MkdirAll(valuesDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(valuesDir, "base.yaml"), []byte(`cilium:
+  prometheus:
+    serviceMonitor:
+      enabled: true
+`), 0600))
+
+	previousInstall := installComponentFn
+	previousAvailable := serviceMonitorCRDAvailableFn
+	previousWait := waitForServiceMonitorCRDFn
+	t.Cleanup(func() {
+		installComponentFn = previousInstall
+		serviceMonitorCRDAvailableFn = previousAvailable
+		waitForServiceMonitorCRDFn = previousWait
+	})
+
+	calls := []string{}
+	installComponentFn = func(_ context.Context, _, _, _, _ string, _, _ bool, _ string, component componentConfig) (bool, error) {
+		calls = append(calls, component.name)
+		return true, nil
+	}
+	serviceMonitorCRDAvailableFn = func(_, _ string) (bool, error) { return true, nil }
+	waitForServiceMonitorCRDFn = func(_ context.Context, _, _ string) error {
+		calls = append(calls, "wait-for-servicemonitor-crd")
+		return nil
+	}
+
+	_, err := InstallCilium(context.Background(), "", "", "homelab", baseDir, false, false, "")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"cilium"}, calls)
 }
 
 func TestLoadValuesPreservesArgoCDBootstrapPrecedence(t *testing.T) {
@@ -200,4 +320,33 @@ dependencies:
 	require.NoError(t, err)
 
 	assert.Equal(t, repositoryRendered, bootstrapRendered)
+}
+
+func TestRenderComponentTemplatesIncludesOnlyEnabledResources(t *testing.T) {
+	componentDir := filepath.Join(t.TempDir(), "cilium")
+	require.NoError(t, os.MkdirAll(filepath.Join(componentDir, "templates"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(componentDir, "Chart.yaml"), []byte("apiVersion: v2\nname: cilium\nversion: 1.20.1\n"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(componentDir, "templates", "servicemonitor.yaml"), []byte(`{{- if .Values.prometheus.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cilium-agent
+{{- end }}
+`), 0600))
+
+	componentChart, err := loader.Load(componentDir)
+	require.NoError(t, err)
+
+	disabled, err := renderComponentTemplates(componentChart, map[string]interface{}{
+		"prometheus": map[string]interface{}{"serviceMonitor": map[string]interface{}{"enabled": false}},
+	}, ciliumComponent, true)
+	require.NoError(t, err)
+	assert.NotContains(t, disabled, "ServiceMonitor")
+
+	enabled, err := renderComponentTemplates(componentChart, map[string]interface{}{
+		"prometheus": map[string]interface{}{"serviceMonitor": map[string]interface{}{"enabled": true}},
+	}, ciliumComponent, true)
+	require.NoError(t, err)
+	assert.True(t, strings.Contains(enabled, "kind: ServiceMonitor"))
+	assert.Contains(t, enabled, "name: cilium-agent")
 }

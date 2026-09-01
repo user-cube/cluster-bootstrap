@@ -89,6 +89,15 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	}
 
 	logger := NewLogger(verbose)
+	templateOutputPath := ""
+	if verboseWithTemplates {
+		outputDir, err := filepath.Abs(baseDir)
+		if err != nil {
+			return fmt.Errorf("failed to resolve template output directory: %w", err)
+		}
+		templateOutputPath = filepath.Join(outputDir, fmt.Sprintf("bootstrap-rendered-helm-manifests-%s-%d.yaml", env, time.Now().UnixNano()))
+		fmt.Printf("  Rendered Helm manifests will be written to: %s\n", templateOutputPath)
+	}
 
 	// Detect if we're running from a subdirectory and adjust paths accordingly
 	var argoCDAppPath string
@@ -440,7 +449,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 			helmTimer := startStage("Installing Cilium")
 			helmStage := logger.Stage("Installing Cilium via Helm")
 			stepf("Installing Cilium via Helm and waiting for it to become healthy...")
-			installed, installErr := helm.InstallCilium(ctx, kubeconfig, kubeContext, env, baseDir, verbose)
+			installed, installErr := helm.InstallCilium(ctx, kubeconfig, kubeContext, env, baseDir, verbose, verboseWithTemplates, templateOutputPath)
 			if installErr != nil {
 				report.AddStage(helmTimer.complete(false, installErr))
 				return installErr
@@ -463,7 +472,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 			helmTimer := startStage("Installing ArgoCD")
 			helmStage := logger.Stage("Installing ArgoCD via Helm")
 			stepf("Installing ArgoCD via Helm...")
-			installed, installErr := helm.InstallArgoCD(ctx, kubeconfig, kubeContext, env, baseDir, verbose)
+			installed, installErr := helm.InstallArgoCD(ctx, kubeconfig, kubeContext, env, baseDir, verbose, verboseWithTemplates, templateOutputPath)
 			if installErr != nil {
 				report.AddStage(helmTimer.complete(false, installErr))
 				return installErr
