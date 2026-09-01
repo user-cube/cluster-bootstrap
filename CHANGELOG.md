@@ -1,3 +1,10 @@
+## [1.10.1](https://github.com/user-cube/cluster-bootstrap/compare/v1.10.0...v1.10.1) (2026-09-01)
+
+
+### Bug Fixes
+
+* bootstrap Prometheus CRDs for Cilium monitors ([#78](https://github.com/user-cube/cluster-bootstrap/issues/78)) ([02dbb79](https://github.com/user-cube/cluster-bootstrap/commit/02dbb79f60da476a4196d6a8f36e5aef1fa91161))
+
 # [1.10.0](https://github.com/user-cube/cluster-bootstrap/compare/v1.9.0...v1.10.0) (2026-08-31)
 
 
