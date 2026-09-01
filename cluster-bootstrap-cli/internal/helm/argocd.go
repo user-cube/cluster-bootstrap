@@ -287,13 +287,16 @@ func appendRenderedTemplates(path, componentName, manifest string) error {
 	if path == "" {
 		return fmt.Errorf("template output path is required when verbose templates are enabled")
 	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600) // #nosec G304 -- bootstrap creates this absolute path beneath --base-dir.
 	if err != nil {
 		return fmt.Errorf("failed to open rendered template output %s: %w", path, err)
 	}
-	defer file.Close()
 	if _, err := fmt.Fprintf(file, "# BEGIN RENDERED %s HELM MANIFESTS\n%s# END RENDERED %s HELM MANIFESTS\n", strings.ToUpper(componentName), manifest, strings.ToUpper(componentName)); err != nil {
+		_ = file.Close()
 		return fmt.Errorf("failed to write rendered templates to %s: %w", path, err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("failed to close rendered template output %s: %w", path, err)
 	}
 	return nil
 }
